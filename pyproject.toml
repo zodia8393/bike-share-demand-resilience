@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bike-share-demand-resilience"
+version = "0.1.0"
+description = "Portfolio-grade bike-share demand forecasting and resilience analysis."
+requires-python = ">=3.10"
+dependencies = [
+  "pandas",
+  "numpy",
+  "scikit-learn",
+  "matplotlib",
+  "seaborn",
+  "scipy",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
