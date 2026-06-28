@@ -1,8 +1,8 @@
 # Bike-Share Demand Resilience Forecasting
 
-Portfolio-grade data science project for mobility operations forecasting.
+서울시 따릉이 대여량의 수요를 시간 단위로 예측하고, 수요 급변(날씨 충격, 계절/휴일/출퇴근 피크)에 대한 복원력을 측정하는 포트폴리오형 데이터 과학 프로젝트입니다.
 
-This project builds an end-to-end hourly bike-share demand forecasting and resilience analysis pipeline using the UCI Bike Sharing Dataset, with a deterministic synthetic fallback that preserves the public data contract when network access is unavailable.
+이 프로젝트는 UCI Bike Sharing 공개 데이터셋을 기반으로 시계열 누수 방지 분할, 피처 엔지니어링(달력/계절성/날씨 스트레스/라그/이동평균/상호작용), 모델 비교, 잔차 감사, 신뢰구간/운영 의사결정 레이어를 end-to-end로 구성했습니다.
 
 ## Problem
 
