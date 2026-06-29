@@ -21,11 +21,11 @@
 | 왜 MAPE만 보지 않았는가? | 야간 저수요 구간에서 MAPE가 과대해질 수 있어 WAPE/sMAPE/MAE를 함께 봤습니다. |
 | conformal interval을 왜 넣었는가? | 운영 행동은 point forecast보다 불확실성 폭이 중요하므로 자동 행동 억제 기준으로 쓸 수 있습니다. |
 | weather shock은 인과 분석인가? | 아닙니다. 관측 feature support 안에서의 모델 기반 민감도 분석으로 제한했습니다. |
-| 실제 서비스와 무엇이 다른가? | station-level 위치, dock capacity, 이벤트, 장애, 실시간 날씨 API가 필요합니다. |
+| 실제 서비스와 무엇이 다른가? | 현재는 public trip/status/weather 기반 reviewer-facing queue이며, 실제 dispatch에는 accumulated shortage labels, 이벤트, 장애, 요금, 운영 인증이 필요합니다. |
 
 ## 보완하면 좋은 다음 작업
 
-1. 서울시 따릉이 station-level 대여/반납 데이터로 공간 단위 예측 확장
+1. hourly station_status snapshot을 누적해 true shortage label과 prospective validation 확장
 2. Prophet/LightGBM/CatBoost 등 추가 모델을 같은 protocol로 비교
 3. SHAP 또는 partial dependence로 feature effect 해석 강화
 4. MLflow 또는 lightweight registry로 실험 versioning 강화

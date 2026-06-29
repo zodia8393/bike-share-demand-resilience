@@ -27,7 +27,7 @@ jobs:
           python -m pip install -r requirements.txt
 
       - name: Syntax check
-        run: python -m py_compile src/bike_share_resilience/pipeline.py src/bike_share_resilience/station_pipeline.py tests/test_pipeline.py tests/test_station_pipeline.py
+        run: python -m py_compile src/bike_share_resilience/pipeline.py src/bike_share_resilience/station_pipeline.py src/bike_share_resilience/station_service.py tests/test_pipeline.py tests/test_station_pipeline.py tests/test_station_service.py scripts/capture_station_status_snapshot.py
 
       - name: Unit tests
         run: PYTHONPATH=src python -m pytest tests -q
@@ -44,6 +44,16 @@ jobs:
           SYNTHETIC_FLAG: --synthetic
           TOP_STATIONS: "10"
         run: scripts/run_station_level.sh
+
+      - name: Station inventory snapshot smoke run
+        env:
+          OUTPUT_ROOT: ${{ runner.temp }}/bike-share-demand-resilience
+        run: python scripts/capture_station_status_snapshot.py --output-root "$OUTPUT_ROOT" --synthetic
+
+      - name: Station dashboard artifact check
+        env:
+          OUTPUT_ROOT: ${{ runner.temp }}/bike-share-demand-resilience
+        run: PYTHONPATH=src python -m bike_share_resilience.station_service --output-root "$OUTPUT_ROOT" --check
 
       - name: Quality gate assertion
         env:

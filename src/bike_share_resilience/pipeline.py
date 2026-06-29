@@ -728,7 +728,7 @@ def build_quality_gate_scores(metrics: dict, metadata: dict, row_counts: dict[st
         {
             "category": "doctoral-level originality, depth, and technical ambition",
             "score": 92,
-            "evidence": "uncertainty-aware operations framing; station-level multi-source extension added; historical inventory remains documented gap",
+            "evidence": "uncertainty-aware operations framing; station-level inventory/API extension added; true shortage labels require snapshot accumulation",
         },
     ]
     return pd.DataFrame(rows)

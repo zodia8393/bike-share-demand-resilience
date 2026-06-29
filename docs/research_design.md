@@ -17,8 +17,8 @@
 - Uncertainty/robustness: bootstrap MAE confidence interval, split-conformal 90% interval, segment coverage, weather shock scenario를 산출한다.
 - Failure audit: commute peak, bad weather, weekend, night segment의 residual과 coverage를 분리한다.
 - Decision impact: conformal upper bound를 수요 bucket별 staging target으로 변환하고 fleet budget 제약 최적화를 실행한다.
-- Station-level extension: Jersey City trip history, GBFS station metadata, Open-Meteo weather를 결합해 station-hour demand forecast와 rebalancing priority를 산출한다.
+- Station-level extension: Jersey City trip history, GBFS station metadata/status, Open-Meteo weather를 결합해 station-hour demand forecast, live inventory shortage signal, rebalancing priority를 산출한다.
 
 ## 한계와 윤리
 
-현재 프로젝트는 사용자·정류장·좌표 식별자를 포함하지 않는 공개 집계 데이터만 사용한다. station-level 운영 claim은 하지 않고, 실제 dispatch 적용 전 필요한 capacity, trip, station coordinate, real-time weather/event join을 `research_gap_report.md`에 명시한다.
+현재 공개 repo는 raw 사용자/trip identifier와 raw 좌표 데이터를 포함하지 않는다. station-level 확장은 공개 Citi Bike trip/status와 Open-Meteo를 `/DATA`에 보관해 재현하되, 실제 dispatch claim은 하지 않고, true shortage label을 만들기 위한 시간별 status snapshot 축적과 event/maintenance feature 필요성을 `research_gap_report.md`에 명시한다.

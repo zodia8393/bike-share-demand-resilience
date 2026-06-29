@@ -21,9 +21,12 @@ station-level extension은 별도 pipeline에서 다음 공개 원천을 실제 
 
 - Citi Bike Jersey City trip history `JC-202401`: `start_station_id`, `started_at`로 station-hour start demand를 생성합니다.
 - Citi Bike GBFS `station_information.json`: `short_name`을 trip `start_station_id`와 join해 station coordinate와 capacity를 결합합니다.
+- Citi Bike GBFS `station_status.json`: `station_id`를 `gbfs_station_id`와 join해 live bikes/docks inventory snapshot과 shortage flag를 생성합니다.
 - Open-Meteo historical hourly weather: `hour`를 기준으로 station-hour frame에 temperature, humidity, precipitation, wind를 결합합니다.
 
 raw ride_id와 raw JSON/zip은 `/DATA`에만 저장하고 Git에는 포함하지 않습니다.
+
+`station_status.json`은 현재 시점 live feed이므로 2024년 1월 trip history의 historical label로 사용하지 않습니다. 시간별 snapshot이 누적된 이후에는 prospective shortage outcome 검증 데이터로 분리합니다.
 
 향후 station-level 확장 시 join key는 다음 원칙을 따릅니다.
 
@@ -41,6 +44,8 @@ raw ride_id와 raw JSON/zip은 `/DATA`에만 저장하고 Git에는 포함하지
 | processed feature | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/data/processed/hourly_features.parquet` | 제외 |
 | source metadata | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/data/raw/source_metadata.json` | 제외 |
 | data dictionary | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/data/processed/data_dictionary.csv` | 제외 |
+| station status snapshots | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/data/status_snapshots/` | 제외 |
+| station inventory snapshot | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/data/processed/station_inventory_snapshot.csv` | 제외 |
 
 Git에는 재현 코드와 경량 문서만 포함합니다. 데이터와 모델 파일은 재생성 가능 산출물로 취급합니다.
 

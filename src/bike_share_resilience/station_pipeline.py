@@ -25,6 +25,7 @@ from bike_share_resilience.pipeline import conformal_intervals, evaluate_predict
 KST = ZoneInfo("Asia/Seoul")
 TRIP_URL = "https://s3.amazonaws.com/tripdata/JC-202401-citibike-tripdata.csv.zip"
 GBFS_STATION_INFO_URL = "https://gbfs.citibikenyc.com/gbfs/en/station_information.json"
+GBFS_STATION_STATUS_URL = "https://gbfs.citibikenyc.com/gbfs/en/station_status.json"
 OPEN_METEO_ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
 JERSEY_CITY_LAT = 40.7178
 JERSEY_CITY_LON = -74.0431
@@ -48,16 +49,24 @@ class StationPaths:
         return self.station_root / "data" / "processed"
 
     @property
+    def status_snapshot_dir(self) -> Path:
+        return self.station_root / "data" / "status_snapshots"
+
+    @property
     def report_dir(self) -> Path:
         return self.station_root / "reports"
 
     def ensure(self) -> None:
-        for path in [self.raw_dir, self.processed_dir, self.report_dir]:
+        for path in [self.raw_dir, self.processed_dir, self.status_snapshot_dir, self.report_dir]:
             path.mkdir(parents=True, exist_ok=True)
 
 
 def current_kst_date() -> str:
     return datetime.now(KST).strftime("%Y-%m-%d KST")
+
+
+def current_kst_stamp() -> str:
+    return datetime.now(KST).strftime("%Y%m%d_%H%M%S")
 
 
 def parse_args() -> argparse.Namespace:
@@ -162,6 +171,64 @@ def acquire_station_info(paths: StationPaths, *, synthetic: bool) -> tuple[pd.Da
         "fallback_used": False,
     }
     return stations, metadata
+
+
+def acquire_station_status(paths: StationPaths, *, synthetic: bool) -> tuple[pd.DataFrame, dict]:
+    if synthetic:
+        rows = []
+        for idx in range(12):
+            capacity = 14 + idx
+            bikes = max(0, int(capacity * (0.15 + 0.06 * (idx % 5))))
+            rows.append(
+                {
+                    "gbfs_station_id": f"synthetic-{idx}",
+                    "num_bikes_available": bikes,
+                    "num_docks_available": max(0, capacity - bikes),
+                    "is_installed": 1,
+                    "is_renting": 1,
+                    "is_returning": 1,
+                    "last_reported": int(datetime(2024, 2, 11, tzinfo=KST).timestamp()),
+                }
+            )
+        status = pd.DataFrame(rows)
+        metadata = {
+            "source_name": "synthetic station status snapshot",
+            "rows": int(len(status)),
+            "fallback_used": True,
+        }
+        return status, metadata
+
+    with urllib.request.urlopen(GBFS_STATION_STATUS_URL, timeout=45) as response:
+        payload = response.read()
+    current_path = paths.raw_dir / "citibike_gbfs_station_status_current.json"
+    snapshot_path = paths.status_snapshot_dir / f"{current_kst_stamp()}_station_status.json"
+    current_path.write_bytes(payload)
+    snapshot_path.write_bytes(payload)
+    data = json.loads(payload.decode("utf-8"))
+    rows = []
+    for station in data.get("data", {}).get("stations", []):
+        rows.append(
+            {
+                "gbfs_station_id": station.get("station_id"),
+                "num_bikes_available": station.get("num_bikes_available"),
+                "num_docks_available": station.get("num_docks_available"),
+                "is_installed": station.get("is_installed"),
+                "is_renting": station.get("is_renting"),
+                "is_returning": station.get("is_returning"),
+                "last_reported": station.get("last_reported"),
+            }
+        )
+    status = pd.DataFrame(rows)
+    metadata = {
+        "source_name": "Citi Bike GBFS station_status current snapshot",
+        "source_url": GBFS_STATION_STATUS_URL,
+        "raw_path": str(current_path),
+        "snapshot_path": str(snapshot_path),
+        "rows": int(len(status)),
+        "columns": list(status.columns),
+        "fallback_used": False,
+    }
+    return status, metadata
 
 
 def acquire_weather(paths: StationPaths, start_date: str, end_date: str, *, synthetic: bool) -> tuple[pd.DataFrame, dict]:
@@ -335,6 +402,36 @@ def prepare_station_hour_frame(
     return frame, metadata
 
 
+def build_inventory_snapshot(station_meta: pd.DataFrame, station_status: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+    base_columns = [
+        "station_short_name",
+        "station_name",
+        "gbfs_station_id",
+        "station_lat",
+        "station_lon",
+        "capacity",
+    ]
+    available = [col for col in base_columns if col in station_meta.columns]
+    inventory = station_meta[available].drop_duplicates("station_short_name").copy()
+    inventory = inventory.merge(station_status, on="gbfs_station_id", how="left")
+    for col in ["num_bikes_available", "num_docks_available", "capacity"]:
+        inventory[col] = pd.to_numeric(inventory[col], errors="coerce")
+    inventory["capacity"] = inventory["capacity"].fillna(inventory["capacity"].median()).fillna(20)
+    inventory["bike_shortage_threshold"] = np.ceil((inventory["capacity"] * 0.10).clip(lower=1))
+    inventory["dock_shortage_threshold"] = np.ceil((inventory["capacity"] * 0.10).clip(lower=1))
+    inventory["current_bike_shortage"] = inventory["num_bikes_available"].le(inventory["bike_shortage_threshold"])
+    inventory["current_dock_shortage"] = inventory["num_docks_available"].le(inventory["dock_shortage_threshold"])
+    inventory["inventory_pressure"] = 1 - (inventory["num_bikes_available"] / inventory["capacity"].clip(lower=1))
+    inventory["inventory_joined"] = inventory["num_bikes_available"].notna()
+    metadata = {
+        "inventory_rows": int(len(inventory)),
+        "inventory_join_rate": float(inventory["inventory_joined"].mean()) if len(inventory) else 0.0,
+        "bike_shortage_rows": int(inventory["current_bike_shortage"].fillna(False).sum()),
+        "dock_shortage_rows": int(inventory["current_dock_shortage"].fillna(False).sum()),
+    }
+    return inventory, metadata
+
+
 def chronological_split(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     hours = pd.Series(pd.to_datetime(df["hour"]).sort_values().unique())
     train_cut = hours.iloc[int(len(hours) * 0.70) - 1]
@@ -433,7 +530,12 @@ def segment_metrics(df: pd.DataFrame, pred: np.ndarray) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def make_rebalancing_priority(test: pd.DataFrame, pred: np.ndarray, conformal_radius: float) -> pd.DataFrame:
+def make_rebalancing_priority(
+    test: pd.DataFrame,
+    pred: np.ndarray,
+    conformal_radius: float,
+    inventory_snapshot: pd.DataFrame | None = None,
+) -> pd.DataFrame:
     latest_hour = test["hour"].max()
     window = test.loc[test["hour"] >= latest_hour - pd.Timedelta(hours=23)].copy()
     if window.empty:
@@ -452,6 +554,18 @@ def make_rebalancing_priority(test: pd.DataFrame, pred: np.ndarray, conformal_ra
     summary["upper_demand_24h"] = summary["forecast_24h"] + conformal_radius * math.sqrt(24)
     summary["risk_score"] = summary["upper_demand_24h"] / summary["capacity"].clip(lower=1)
     summary["recommended_buffer_bikes"] = np.ceil((summary["risk_score"] - 1).clip(lower=0) * summary["capacity"] * 0.25)
+    if inventory_snapshot is not None and not inventory_snapshot.empty:
+        live_cols = [
+            "station_short_name",
+            "num_bikes_available",
+            "num_docks_available",
+            "current_bike_shortage",
+            "current_dock_shortage",
+            "inventory_pressure",
+        ]
+        summary = summary.merge(inventory_snapshot[live_cols], on="station_short_name", how="left")
+        summary["live_shortage_boost"] = summary["current_bike_shortage"].fillna(False).astype(int) * 0.75
+        summary["risk_score"] = summary["risk_score"] + summary["live_shortage_boost"]
     return summary.sort_values("risk_score", ascending=False).head(12)
 
 
@@ -474,9 +588,11 @@ def render_station_report(
             f"- Trip history: {metadata['sources']['trips']['source_name']} ({metadata['sources']['trips'].get('rows')} rows)",
             f"- Station metadata: {metadata['sources']['station_info']['source_name']} ({metadata['sources']['station_info'].get('rows')} stations)",
             f"- Weather: {metadata['sources']['weather']['source_name']} ({metadata['sources']['weather'].get('rows')} hours)",
+            f"- Inventory snapshot: {metadata['sources']['station_status']['source_name']} ({metadata['sources']['station_status'].get('rows')} status rows)",
             f"- Station-hour rows: {metadata['frame']['row_count']}",
             f"- Station count: {metadata['frame']['station_count']}",
             f"- GBFS join rate: {metadata['frame']['gbfs_join_rate']:.1%}",
+            f"- Inventory join rate: {metadata['frame']['inventory_join_rate']:.1%}",
             "",
             "## 모델 비교",
             "",
@@ -498,6 +614,8 @@ def render_station_report(
                         "forecast_24h",
                         "upper_demand_24h",
                         "capacity",
+                        "num_bikes_available",
+                        "current_bike_shortage",
                         "risk_score",
                         "recommended_buffer_bikes",
                     ]
@@ -512,7 +630,8 @@ def render_station_report(
             "## 해석 제한",
             "",
             "- GBFS station capacity는 현재 metadata이므로 2024년 1월 당시 capacity와 다를 수 있다.",
-            "- Trip history에는 실시간 재고와 장애 상태가 없어서 실제 shortage label이 아니라 demand pressure proxy를 사용했다.",
+            "- 현재 station_status snapshot은 live inventory이므로 2024년 1월 historical inventory label은 아니다.",
+            "- 시간별 snapshot cron이 쌓인 이후에는 true shortage label을 별도 prospective validation으로 구성할 수 있다.",
             "- raw ride_id는 `/DATA` raw artifact에만 두고 공개 repo에는 aggregate/report/schema만 둔다.",
             "",
         ]
@@ -532,6 +651,12 @@ def build_quality_gate(metrics: dict, metadata: dict) -> pd.DataFrame:
             "passed": metadata["sources"]["weather"].get("rows", 0) >= 24 * 20,
             "evidence": f"weather_hours={metadata['sources']['weather'].get('rows')}",
             "threshold": ">=20 days of hourly weather",
+        },
+        {
+            "gate": "inventory snapshot",
+            "passed": metadata["frame"].get("inventory_join_rate", 0) >= 0.80,
+            "evidence": f"inventory_join_rate={metadata['frame'].get('inventory_join_rate', 0):.1%}, shortage_rows={metadata['frame'].get('bike_shortage_rows', 0)}",
+            "threshold": ">=80% station inventory join",
         },
         {
             "gate": "baseline comparison",
@@ -560,10 +685,17 @@ def run_pipeline(output_root: Path, *, top_stations: int = 35, synthetic: bool =
     paths.ensure()
     trips, trip_meta = acquire_trips(paths, synthetic=synthetic)
     station_info, station_meta = acquire_station_info(paths, synthetic=synthetic)
+    station_status, station_status_meta = acquire_station_status(paths, synthetic=synthetic)
     start_date = str(pd.to_datetime(trips["started_at"]).min().date())
     end_date = str(pd.to_datetime(trips["started_at"]).max().date())
     weather, weather_meta = acquire_weather(paths, start_date, end_date, synthetic=synthetic)
     frame, frame_meta = prepare_station_hour_frame(trips, station_info, weather, top_stations=top_stations)
+    station_meta_frame = frame[
+        ["station_short_name", "station_name", "gbfs_station_id", "station_lat", "station_lon", "capacity"]
+    ].drop_duplicates("station_short_name")
+    inventory_snapshot, inventory_meta = build_inventory_snapshot(station_meta_frame, station_status)
+    inventory_snapshot.to_csv(paths.processed_dir / "station_inventory_snapshot.csv", index=False)
+    frame_meta.update(inventory_meta)
     train, valid, test = chronological_split(frame)
     train_valid = pd.concat([train, valid], ignore_index=True)
 
@@ -604,7 +736,7 @@ def run_pipeline(output_root: Path, *, top_stations: int = 35, synthetic: bool =
     intervals.to_csv(paths.report_dir / "station_conformal_intervals.csv", index=False)
     segment_df = segment_metrics(test, best_test_pred)
     segment_df.to_csv(paths.report_dir / "station_segment_audit.csv", index=False)
-    priority_df = make_rebalancing_priority(test, best_test_pred, conformal_summary["conformal_radius"])
+    priority_df = make_rebalancing_priority(test, best_test_pred, conformal_summary["conformal_radius"], inventory_snapshot)
     priority_df.to_csv(paths.report_dir / "station_rebalancing_priority.csv", index=False)
 
     baseline_mae = float(
@@ -617,6 +749,7 @@ def run_pipeline(output_root: Path, *, top_stations: int = 35, synthetic: bool =
         "sources": {
             "trips": trip_meta,
             "station_info": station_meta,
+            "station_status": station_status_meta,
             "weather": weather_meta,
         },
         "frame": frame_meta,

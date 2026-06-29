@@ -9,9 +9,11 @@ if str(SRC) not in sys.path:
 import pandas as pd
 
 from bike_share_resilience.station_pipeline import (
+    acquire_station_status,
     acquire_station_info,
     acquire_trips,
     acquire_weather,
+    build_inventory_snapshot,
     chronological_split,
     prepare_station_hour_frame,
     run_pipeline,
@@ -39,6 +41,19 @@ def test_station_hour_frame_joins_sources(tmp_path):
     assert {"start_count", "capacity", "temperature_2m", "lag_24"}.issubset(frame.columns)
 
 
+def test_inventory_snapshot_adds_live_shortage_signals(tmp_path):
+    paths = StationPaths(tmp_path)
+    paths.ensure()
+    stations, _ = acquire_station_info(paths, synthetic=True)
+    status, status_meta = acquire_station_status(paths, synthetic=True)
+    inventory, meta = build_inventory_snapshot(stations, status)
+
+    assert status_meta["fallback_used"] is True
+    assert meta["inventory_join_rate"] == 1.0
+    assert {"num_bikes_available", "current_bike_shortage", "inventory_pressure"}.issubset(inventory.columns)
+    assert inventory["current_bike_shortage"].any()
+
+
 def test_station_profile_baseline_and_split(tmp_path):
     paths = StationPaths(tmp_path)
     paths.ensure()
@@ -61,5 +76,7 @@ def test_station_pipeline_synthetic_smoke(tmp_path):
 
     assert payload["quality_gate_passed"] is True
     assert payload["metadata"]["frame"]["station_count"] == 10
+    assert payload["metadata"]["frame"]["inventory_join_rate"] == 1.0
     assert (report_dir / "station_level_report.md").exists()
     assert (report_dir / "station_quality_gate_checks.csv").exists()
+    assert (tmp_path / "station_level" / "data" / "processed" / "station_inventory_snapshot.csv").exists()
