@@ -1,5 +1,7 @@
 # 따릉이 수요 회복력 예측 연구
 
+[![ci](https://github.com/zodia8393/bike-share-demand-resilience/actions/workflows/ci.yml/badge.svg)](https://github.com/zodia8393/bike-share-demand-resilience/actions/workflows/ci.yml)
+
 시간대별 공공자전거 수요를 예측하고, 출퇴근 피크·악천후·주말 수요 구간에서 모델이 얼마나 안정적으로 작동하는지 검증한 연구형 데이터 사이언스 포트폴리오입니다. 단순 예측 점수보다 운영 의사결정에 필요한 기준선 비교, 시간순 검증, 예측구간, 구간별 오차 감사, 제약 기반 재배치 데모를 한 pipeline으로 묶었습니다.
 
 ## 핵심 결과
@@ -16,6 +18,9 @@
 | Bootstrap MAE 95% CI | [34.31, 37.61] |
 | Split-conformal 90% coverage | 92.3% |
 | Station-level 확장 | 35개 station, trip+GBFS+weather+live inventory 결합, quality gate PASS |
+| Snapshot readiness | 3 / 336 hourly snapshots, 2026-07-13 이후 2주 gate 재평가 |
+| Public deploy decision | `NO_GO` until 2-week prospective validation readiness |
+| CI | GitHub Actions PASS, 14 tests |
 
 해석상 중요한 지점:
 
@@ -24,6 +29,7 @@
 - 출퇴근 피크는 전체 평균보다 MAE가 높아 별도 운영 risk segment로 관리해야 합니다.
 - 악천후 시나리오는 관측 조건 대비 평균 예측 수요를 약 17% 낮추는 방향으로 나타났습니다.
 - 예측값과 conformal 반경을 수요 버킷별 staging target으로 변환해 fleet budget 제약 최적화까지 연결했습니다.
+- live station inventory는 매시 snapshot으로 자동 축적되며, 2주 coverage가 충족되기 전까지 public deployment는 의도적으로 막습니다.
 
 ## 대표 시각화
 
@@ -37,6 +43,7 @@
 2. 전체 평균 성능이 아니라 출퇴근·주말·악천후 구간에서 어떤 실패 패턴이 나타나는가?
 3. point forecast를 운영자가 검토 가능한 불확실성 구간과 재배치 target으로 변환할 수 있는가?
 4. station-level 수요는 station capacity와 weather를 결합했을 때 운영 우선순위로 변환 가능한가?
+5. live station_status snapshot이 2주 이상 축적되면 true shortage label 기반 prospective validation으로 확장 가능한가?
 
 ## 방법론
 
@@ -51,6 +58,19 @@
 | 해석 | residual segment audit, permutation importance, weather shock scenario |
 | 의사결정 | conformal radius를 반영한 demand bucket staging target과 linear programming allocation |
 | Station-level 확장 | Jersey City Citi Bike trip history, GBFS station metadata/status, Open-Meteo hourly weather를 station-hour grain으로 결합 |
+| Prospective 운영화 | hourly station_status snapshot monitor, next-snapshot shortage label panel, public deploy readiness gate |
+
+## 현재 운영 상태
+
+| 항목 | 상태 |
+|---|---|
+| Source repo | `main` synced with `origin/main` |
+| Latest CI | PASS |
+| Station snapshot monitor | 매시 15분 cron 등록 |
+| Snapshot readiness | `ready_for_prospective_validation=false`, 3 snapshots, 265 snapshots remaining |
+| Earliest 2-week readiness | `2026-07-13T14:04:57+09:00` |
+| Public deployment | `NO_GO`; local dashboard/API만 사용 |
+| Local dashboard | `http://127.0.0.1:8765` via `scripts/run_station_dashboard.sh` |
 
 ## Repo 구조
 
@@ -82,7 +102,8 @@
 │   ├── conftest.py
 │   ├── test_pipeline.py
 │   ├── test_station_pipeline.py
-│   └── test_station_service.py
+│   ├── test_station_service.py
+│   └── test_station_snapshot_analysis.py
 ├── pyproject.toml
 └── requirements.txt
 ```
@@ -170,6 +191,8 @@ SYNTHETIC_FLAG=--synthetic TOP_STATIONS=10 OUTPUT_ROOT=/tmp/bike-share-station-s
 | Station-level 보고서 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/reports/station_level_report.md` |
 | Station-level priority | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/reports/station_rebalancing_priority.csv` |
 | Station-level inventory snapshot | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/data/processed/station_inventory_snapshot.csv` |
+| Station inventory history | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/data/processed/station_inventory_history.csv` |
+| Station shortage label panel | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/data/processed/station_shortage_label_panel.csv` |
 | Snapshot readiness | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/reports/station_snapshot_readiness.json` |
 | Public deploy readiness | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/reports/station_public_deploy_readiness.json` |
 | 그림 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/figures/` |
@@ -180,6 +203,7 @@ SYNTHETIC_FLAG=--synthetic TOP_STATIONS=10 OUTPUT_ROOT=/tmp/bike-share-station-s
 - 날씨 충격 분석은 인과 추정이 아니라 모델 기반 민감도 분석입니다.
 - station-level extension은 live `station_status` snapshot을 결합하지만 2024년 1월 trip history와 시점이 다르므로, 현재는 true historical shortage label이 아니라 prospective snapshot 기반 human review queue로 해석해야 합니다. 이 리스크는 hourly snapshot 2주 축적 자동화와 readiness gate로 관리합니다.
 - public deployment는 `docs/public_deployment_decision.md`의 readiness gate가 `GO`가 되기 전까지 보류합니다.
+- `station_public_deploy_readiness.json`이 `NO_GO`인 동안은 외부 배포 대신 local API/dashboard만 사용합니다.
 
 ## 면접에서 설명할 포인트
 
@@ -188,3 +212,4 @@ SYNTHETIC_FLAG=--synthetic TOP_STATIONS=10 OUTPUT_ROOT=/tmp/bike-share-station-s
 - MAPE만 보지 않고 WAPE/sMAPE/MAE CI를 함께 보고한 이유
 - conformal interval을 운영 의사결정의 보수성 기준으로 연결한 방식
 - 공개 데이터의 한계를 인정하고 station-level 확장 설계를 분리한 점
+- 실시간 inventory를 바로 production claim으로 과장하지 않고, 2주 prospective validation gate와 public deployment `NO_GO` 정책으로 리스크를 통제한 점
