@@ -3,9 +3,15 @@ set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUTPUT_ROOT="${OUTPUT_ROOT:-/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience}"
-LOG_DIR="${LOG_DIR:-/workspace/_codex/scripts/logs}"
 SYNTHETIC_FLAG="${SYNTHETIC_FLAG:-}"
 
+if [ -z "${LOG_DIR:-}" ]; then
+  if mkdir -p /workspace/_codex/scripts/logs 2>/dev/null; then
+    LOG_DIR="/workspace/_codex/scripts/logs"
+  else
+    LOG_DIR="$OUTPUT_ROOT/station_level/reports"
+  fi
+fi
 mkdir -p "$LOG_DIR"
 
 cd "$PROJECT_ROOT"
