@@ -1,0 +1,54 @@
+name: ci
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Syntax check
+        run: python -m py_compile src/bike_share_resilience/pipeline.py tests/test_pipeline.py
+
+      - name: Unit tests
+        run: PYTHONPATH=src python -m pytest tests -q
+
+      - name: End-to-end smoke run
+        env:
+          OUTPUT_ROOT: ${{ runner.temp }}/bike-share-demand-resilience
+          REPORT_DIR: ${{ runner.temp }}/bike-share-demand-reports
+        run: scripts/run_all.sh
+
+      - name: Quality gate assertion
+        env:
+          OUTPUT_ROOT: ${{ runner.temp }}/bike-share-demand-resilience
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          summary_path = Path(os.environ["OUTPUT_ROOT"]) / "reports" / "run_summary.json"
+          summary = json.loads(summary_path.read_text(encoding="utf-8"))
+          assert summary["quality_gate_passed"] is True, summary.get("failed_quality_gates")
+          print("quality_gate_passed=True")
+          PY

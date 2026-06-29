@@ -24,6 +24,12 @@
 - 악천후 시나리오는 관측 조건 대비 평균 예측 수요를 약 17% 낮추는 방향으로 나타났습니다.
 - 예측값과 conformal 반경을 수요 버킷별 staging target으로 변환해 fleet budget 제약 최적화까지 연결했습니다.
 
+## 대표 시각화
+
+| 수요 패턴 | 예측 불확실성 | 재배치 의사결정 |
+|---|---|---|
+| ![요일과 시간대별 평균 수요](docs/assets/eda_weekday_hour_heatmap.png) | ![Split-conformal 예측구간](docs/assets/uncertainty_conformal_intervals.png) | ![제약 기반 재배치 배정](docs/assets/optimization_rebalancing_allocation.png) |
+
 ## 연구 질문
 
 1. 시간순 분할을 보존했을 때 공공자전거 시간대별 수요를 어느 수준까지 예측할 수 있는가?
