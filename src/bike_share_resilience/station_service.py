@@ -73,6 +73,8 @@ def load_service_payload(output_root: Path) -> dict:
     report_dir = station_root / "reports"
     inventory_path = resolve_inventory_path(station_root)
     summary = read_json(report_dir / "station_run_summary.json")
+    snapshot_readiness = read_json(report_dir / "station_snapshot_readiness.json")
+    deploy_readiness = read_json(report_dir / "station_public_deploy_readiness.json")
     priority = read_csv_records(report_dir / "station_rebalancing_priority.csv", limit=50)
     inventory = read_csv_records(inventory_path, limit=200)
     quality = read_csv_records(report_dir / "station_quality_gate_checks.csv")
@@ -89,6 +91,8 @@ def load_service_payload(output_root: Path) -> dict:
         "summary": summary,
         "rebalancing_priority": priority,
         "inventory_snapshot": inventory,
+        "snapshot_readiness": snapshot_readiness,
+        "deploy_readiness": deploy_readiness,
         "quality_gates": quality,
         "health": {
             "status": "ok" if summary and priority and inventory and quality_gate_passed and not failed_gates else "degraded",
@@ -97,6 +101,10 @@ def load_service_payload(output_root: Path) -> dict:
             "inventory_rows": len(inventory),
             "failed_gates": failed_gates,
             "quality_gate_passed": quality_gate_passed,
+            "snapshot_ready": bool(snapshot_readiness.get("ready_for_prospective_validation")),
+            "snapshot_count": snapshot_readiness.get("snapshot_count"),
+            "snapshot_span_days": snapshot_readiness.get("span_days"),
+            "deploy_decision": deploy_readiness.get("decision"),
             "inventory_path": str(inventory_path) if inventory_path.exists() else None,
         },
     }
@@ -193,7 +201,7 @@ def render_dashboard_html(payload: dict) -> str:
     .status {{ display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line); background: white; }}
     .dot {{ width: 9px; height: 9px; border-radius: 99px; background: var(--warn); }}
     .status.ok .dot {{ background: var(--accent); }}
-    .metrics {{ display: grid; grid-template-columns: repeat(6, minmax(130px, 1fr)); gap: 12px; margin-top: 20px; }}
+    .metrics {{ display: grid; grid-template-columns: repeat(8, minmax(120px, 1fr)); gap: 12px; margin-top: 20px; }}
     .metric {{ border-top: 3px solid var(--accent); background: white; padding: 12px 0; }}
     .metric span {{ display: block; color: var(--muted); font-size: 12px; }}
     .metric strong {{ display: block; margin-top: 2px; font-size: 20px; }}
@@ -219,6 +227,8 @@ def render_dashboard_html(payload: dict) -> str:
       <div class="metric"><span>Conformal coverage</span><strong>{html.escape(fmt(coverage, 3))}</strong></div>
       <div class="metric"><span>Stations</span><strong>{html.escape(fmt(frame.get("station_count"), 0))}</strong></div>
       <div class="metric"><span>Inventory rows</span><strong>{html.escape(fmt(health.get("inventory_rows"), 0))}</strong></div>
+      <div class="metric"><span>Snapshot count</span><strong>{html.escape(fmt(health.get("snapshot_count"), 0))}</strong></div>
+      <div class="metric"><span>Deploy decision</span><strong>{html.escape(fmt(health.get("deploy_decision")))}</strong></div>
     </section>
   </header>
   <main>
@@ -283,6 +293,12 @@ class StationServiceHandler(BaseHTTPRequestHandler):
         if self.path == "/api/inventory-snapshot":
             self.send_json(payload["inventory_snapshot"])
             return
+        if self.path == "/api/snapshot-readiness":
+            self.send_json(payload["snapshot_readiness"])
+            return
+        if self.path == "/api/deploy-readiness":
+            self.send_json(payload["deploy_readiness"])
+            return
         self.send_json({"error": "not found"}, status=404)
 
 
@@ -301,6 +317,8 @@ def main() -> None:
                 "/api/summary",
                 "/api/rebalancing-priority",
                 "/api/inventory-snapshot",
+                "/api/snapshot-readiness",
+                "/api/deploy-readiness",
                 "/",
             ],
         }

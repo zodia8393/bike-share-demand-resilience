@@ -51,6 +51,12 @@ PYTHONPATH=src python3 -m bike_share_resilience.station_service \
 scripts/run_station_dashboard.sh
 ```
 
+hourly snapshot monitor와 readiness/deploy gate 갱신:
+
+```bash
+scripts/run_station_snapshot_monitor.sh
+```
+
 ## 최신 실행 결과
 
 2026-06-29 KST 실행 기준:
@@ -90,10 +96,12 @@ scripts/run_station_dashboard.sh
 - `/api/summary`
 - `/api/rebalancing-priority`
 - `/api/inventory-snapshot`
+- `/api/snapshot-readiness`
+- `/api/deploy-readiness`
 - `/` dashboard HTML
 
 ## 한계
 
 - GBFS capacity는 현재 metadata라 2024년 1월 historical capacity와 다를 수 있다.
-- 현재 한 번의 live station_status snapshot은 2024년 1월 historical inventory label이 아니므로, true shortage outcome은 시간별 snapshot이 누적된 뒤 prospective validation으로 구성한다.
+- 현재 한 번의 live station_status snapshot은 2024년 1월 historical inventory label이 아니므로, true shortage outcome은 시간별 snapshot이 누적된 뒤 prospective validation으로 구성한다. 이 축적은 매시 15분 cron으로 자동화되어 있고, readiness 기준은 `docs/prospective_shortage_validation.md`에 고정했다.
 - Trip history와 live inventory의 시점이 다르므로 현재 priority는 dispatch 확정값이 아니라 reviewer-facing risk queue로 제한한다.

@@ -61,17 +61,22 @@
 │   ├── data_contract.md
 │   ├── modeling_protocol.md
 │   ├── portfolio_review.md
+│   ├── prospective_shortage_validation.md
+│   ├── public_deployment_decision.md
 │   ├── reproducibility.md
 │   └── station_level_extension.md
 ├── scripts/
 │   ├── capture_station_status_snapshot.py
+│   ├── check_public_deploy_readiness.py
 │   ├── run_all.sh
 │   ├── run_station_dashboard.sh
+│   ├── run_station_snapshot_monitor.sh
 │   └── run_station_level.sh
 ├── src/bike_share_resilience/
 │   ├── __init__.py
 │   ├── pipeline.py
 │   ├── station_pipeline.py
+│   ├── station_snapshot_analysis.py
 │   └── station_service.py
 ├── tests/
 │   ├── conftest.py
@@ -127,6 +132,18 @@ station dashboard/API artifact check:
 PYTHONPATH=src python3 -m bike_share_resilience.station_service --check
 ```
 
+2주 snapshot readiness와 배포 전 gate 갱신:
+
+```bash
+scripts/run_station_snapshot_monitor.sh
+```
+
+public deploy readiness 확인:
+
+```bash
+python3 scripts/check_public_deploy_readiness.py --report-only
+```
+
 local dashboard 실행:
 
 ```bash
@@ -153,14 +170,16 @@ SYNTHETIC_FLAG=--synthetic TOP_STATIONS=10 OUTPUT_ROOT=/tmp/bike-share-station-s
 | Station-level 보고서 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/reports/station_level_report.md` |
 | Station-level priority | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/reports/station_rebalancing_priority.csv` |
 | Station-level inventory snapshot | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/data/processed/station_inventory_snapshot.csv` |
+| Snapshot readiness | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/reports/station_snapshot_readiness.json` |
+| Public deploy readiness | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/reports/station_public_deploy_readiness.json` |
 | 그림 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/figures/` |
 
 ## 한계
 
 - UCI 데이터는 시스템 집계 자료라 정류장 좌표, dock capacity, 장애·점검, 이벤트, 요금 정보를 포함하지 않습니다. 이를 보완하기 위해 별도 station-level extension에서 Citi Bike trip history, GBFS station metadata/status, Open-Meteo weather를 결합했습니다.
 - 날씨 충격 분석은 인과 추정이 아니라 모델 기반 민감도 분석입니다.
-- station-level extension은 live `station_status` snapshot을 결합하지만 2024년 1월 trip history와 시점이 다르므로, 현재는 true historical shortage label이 아니라 prospective snapshot 기반 human review queue로 해석해야 합니다.
-- 실서비스 전환 전에는 historical station_status, 장애·점검, 이벤트, 요금, drift monitoring이 필요합니다.
+- station-level extension은 live `station_status` snapshot을 결합하지만 2024년 1월 trip history와 시점이 다르므로, 현재는 true historical shortage label이 아니라 prospective snapshot 기반 human review queue로 해석해야 합니다. 이 리스크는 hourly snapshot 2주 축적 자동화와 readiness gate로 관리합니다.
+- public deployment는 `docs/public_deployment_decision.md`의 readiness gate가 `GO`가 되기 전까지 보류합니다.
 
 ## 면접에서 설명할 포인트
 

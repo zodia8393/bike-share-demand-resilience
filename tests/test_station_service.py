@@ -25,6 +25,14 @@ def write_service_artifacts(root: Path) -> None:
         "metadata": {"frame": {"station_count": 2}},
     }
     (report_dir / "station_run_summary.json").write_text(json.dumps(summary), encoding="utf-8")
+    (report_dir / "station_snapshot_readiness.json").write_text(
+        json.dumps({"ready_for_prospective_validation": True, "snapshot_count": 400, "span_days": 14.1}),
+        encoding="utf-8",
+    )
+    (report_dir / "station_public_deploy_readiness.json").write_text(
+        json.dumps({"decision": "GO", "blockers": []}),
+        encoding="utf-8",
+    )
     pd.DataFrame(
         [
             {
@@ -74,5 +82,7 @@ def test_station_service_payload_and_dashboard(tmp_path):
     assert payload["health"]["status"] == "ok"
     assert payload["health"]["priority_rows"] == 1
     assert payload["health"]["inventory_rows"] == 1
+    assert payload["health"]["snapshot_ready"] is True
+    assert payload["health"]["deploy_decision"] == "GO"
     assert "Bike-share Station Operations" in html
     assert "JC001" in html
