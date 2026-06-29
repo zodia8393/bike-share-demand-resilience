@@ -62,6 +62,25 @@
 | Station-level 확장 | Jersey City Citi Bike trip history, GBFS station metadata/status, Open-Meteo hourly weather를 station-hour grain으로 결합 |
 | Prospective 운영화 | hourly station_status snapshot monitor, next-snapshot shortage label panel, public deploy readiness gate |
 
+## 방법론 선택 의도
+
+이 프로젝트의 방법 선택 기준은 "점수가 높은 모델"보다 "시간이 지나도 설명 가능하고 운영에 연결되는 예측 시스템"입니다. 각 방법은 아래 위험을 줄이기 위해 사용했습니다.
+
+| 선택 | 사용 의도 | 피하려는 실패 | reviewer에게 보여주는 역량 |
+|---|---|---|---|
+| 시간순 train/valid/test split | 실제 배포 상황처럼 과거로 미래를 예측하게 만들기 | 랜덤 split으로 미래 정보가 섞여 성능이 과대평가되는 문제 | leakage control, time-series validation |
+| `historical_profile_median` baseline | 복잡한 모델이 단순 계절·시간대 규칙보다 실제로 나은지 검증 | 모델을 만들었지만 운영 기준선보다 낫지 않은 상황 | baseline-first modeling, honest benchmarking |
+| Ridge + Gradient Boosting 비교 | 선형 기준과 비선형 모델을 같이 두고 성능·해석성 tradeoff를 확인 | 단일 모델만 제시해 선택 근거가 약해지는 문제 | model selection rationale, tradeoff thinking |
+| lag/rolling feature를 shift 후 생성 | 수요의 단기 관성과 주기성을 반영하되 현재/미래 정보를 보지 않게 제한 | rolling 계산에서 target leakage가 발생하는 문제 | feature engineering discipline |
+| WAPE, sMAPE, MAE, R2 병행 | 수요량 scale과 0 근처 값에 덜 취약한 성능 해석 제공 | MAPE 하나로 운영 오차를 오해하는 문제 | metric literacy, business-aware evaluation |
+| Bootstrap MAE CI | 단일 test score가 우연인지 불확실성을 함께 보고 | "MAE 35.95"만 보고 성능 안정성을 과신하는 문제 | statistical uncertainty communication |
+| Split-conformal interval | point forecast를 운영 buffer와 risk band로 전환 | 예측값 하나만 보고 재배치 결정을 과감하게 내리는 문제 | uncertainty-aware decisioning |
+| residual segment audit | 출퇴근·주말·악천후처럼 실패 가능성이 큰 구간을 별도 점검 | 평균 성능은 좋아 보이지만 중요한 구간에서 실패하는 문제 | error analysis, risk segmentation |
+| weather shock scenario | 날씨가 수요와 운영 보수성에 미치는 방향을 stress test | 상관 feature를 넣고도 실제 의사결정 의미를 설명하지 못하는 문제 | scenario analysis, operational interpretation |
+| linear programming rebalancing demo | 예측과 불확실성을 fleet budget 제약 안의 staging target으로 연결 | 예측 결과가 dashboard 숫자에서 끝나는 문제 | optimization, decision-system design |
+| station-level multi-source join | system-level 집계 한계를 station capacity, inventory, weather 결합으로 보완 | 단일 공개 데이터셋만 쓴 toy forecast로 보이는 문제 | data integration, production data modeling |
+| 2주 prospective snapshot gate | live inventory를 실제 shortage label 검증으로 확장하기 전까지 공개 배포를 보류 | 현재 snapshot을 과거 정답처럼 과장하는 문제 | deployment governance, scientific restraint |
+
 ## 현재 운영 상태
 
 | 항목 | 상태 |
@@ -188,6 +207,12 @@ SYNTHETIC_FLAG=--synthetic TOP_STATIONS=10 OUTPUT_ROOT=/tmp/bike-share-station-s
 ## 산출물 확인 방법
 
 이 repo는 reviewer가 GitHub에서 바로 판단할 수 있도록 핵심 프로토콜과 의사결정 문서는 `docs/`에 커밋하고, 대용량 실행 산출물은 `OUTPUT_ROOT` 아래에 재생성합니다. 절대경로 대신 아래 artifact contract를 기준으로 확인합니다.
+
+이 방식을 쓴 의도는 세 가지입니다.
+
+- GitHub에는 검토에 필요한 설계·프로토콜·의사결정 문서만 남겨 repo를 가볍게 유지합니다.
+- raw data, model pickle, generated report는 실행 환경마다 달라질 수 있으므로 `OUTPUT_ROOT` 아래에 재생성하게 해 재현성을 명확히 합니다.
+- 로컬 절대경로를 README에 노출하지 않아 외부 reviewer가 clone 후 같은 명령으로 산출물을 만들 수 있게 합니다.
 
 | 확인하려는 내용 | 생성 명령 | `OUTPUT_ROOT` 기준 상대 위치 |
 |---|---|---|
