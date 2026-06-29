@@ -39,6 +39,20 @@ PYTHONPATH=src python3 -m pytest tests -q
 python3 -m py_compile src/bike_share_resilience/pipeline.py tests/test_pipeline.py
 ```
 
+## Station-Level 확장
+
+실제 공개 데이터 run:
+
+```bash
+scripts/run_station_level.sh
+```
+
+CI/smoke용 synthetic run:
+
+```bash
+SYNTHETIC_FLAG=--synthetic TOP_STATIONS=10 OUTPUT_ROOT=/tmp/bike-share-station-smoke scripts/run_station_level.sh
+```
+
 ## 성공 시 생성되는 핵심 파일
 
 | 파일 | 용도 |
@@ -52,6 +66,8 @@ python3 -m py_compile src/bike_share_resilience/pipeline.py tests/test_pipeline.
 | `reports/conformal_prediction_intervals.csv` | test 예측구간 |
 | `reports/conformal_segment_coverage.csv` | 구간별 coverage |
 | `reports/rebalancing_optimization.csv` | 운영 최적화 데모 |
+| `station_level/reports/station_level_report.md` | station-hour 복합 데이터 확장 보고서 |
+| `station_level/reports/station_rebalancing_priority.csv` | station별 운영 우선순위 |
 
 ## 재현 확인 기준
 
@@ -60,3 +76,4 @@ python3 -m py_compile src/bike_share_resilience/pipeline.py tests/test_pipeline.
 - `pytest`가 통과합니다.
 - `model_metrics.csv`에 세 모델의 valid/test 결과가 모두 존재합니다.
 - `final_report.md`, `model_card.md`, `data_source_and_contract.md`가 한글로 생성됩니다.
+- station-level 확장은 `station_quality_gate_checks.csv`가 모두 `True`이고 `station_run_summary.json`의 `quality_gate_passed`가 `true`입니다.

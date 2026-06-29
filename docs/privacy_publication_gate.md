@@ -9,6 +9,7 @@
 | SNS 원문 제외 | PASS | SNS/웹 원문을 수집하지 않았다. 향후에는 event count/topic 집계만 공개한다. |
 | secret scan | PASS | repo에는 token, API key, cookie, `.env` 값이 필요하지 않다. |
 | public-safe fallback | PASS | 네트워크 실패 시 동일 schema의 synthetic fallback을 생성한다. |
+| station-level raw 제외 | PASS | Citi Bike ride_id가 포함된 raw zip과 GBFS/Open-Meteo raw JSON은 `/DATA`에만 저장하고 Git에는 코드와 aggregate/report 경로만 남긴다. |
 
 ## 공개 가능 산출물
 

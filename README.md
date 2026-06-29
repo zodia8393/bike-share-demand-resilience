@@ -15,6 +15,7 @@
 | 테스트 R2 | 0.933 |
 | Bootstrap MAE 95% CI | [34.31, 37.61] |
 | Split-conformal 90% coverage | 92.3% |
+| Station-level 확장 | 35개 station, trip+GBFS+weather 결합, quality gate PASS |
 
 해석상 중요한 지점:
 
@@ -35,6 +36,7 @@
 1. 시간순 분할을 보존했을 때 공공자전거 시간대별 수요를 어느 수준까지 예측할 수 있는가?
 2. 전체 평균 성능이 아니라 출퇴근·주말·악천후 구간에서 어떤 실패 패턴이 나타나는가?
 3. point forecast를 운영자가 검토 가능한 불확실성 구간과 재배치 target으로 변환할 수 있는가?
+4. station-level 수요는 station capacity와 weather를 결합했을 때 운영 우선순위로 변환 가능한가?
 
 ## 방법론
 
@@ -48,6 +50,7 @@
 | 검증 | holdout metrics, `TimeSeriesSplit`, bootstrap MAE CI, split-conformal coverage |
 | 해석 | residual segment audit, permutation importance, weather shock scenario |
 | 의사결정 | conformal radius를 반영한 demand bucket staging target과 linear programming allocation |
+| Station-level 확장 | Jersey City Citi Bike trip history, GBFS station metadata, Open-Meteo hourly weather를 station-hour grain으로 결합 |
 
 ## Repo 구조
 
@@ -58,12 +61,15 @@
 │   ├── data_contract.md
 │   ├── modeling_protocol.md
 │   ├── portfolio_review.md
-│   └── reproducibility.md
+│   ├── reproducibility.md
+│   └── station_level_extension.md
 ├── scripts/
-│   └── run_all.sh
+│   ├── run_all.sh
+│   └── run_station_level.sh
 ├── src/bike_share_resilience/
 │   ├── __init__.py
-│   └── pipeline.py
+│   ├── pipeline.py
+│   └── station_pipeline.py
 ├── tests/
 │   ├── conftest.py
 │   └── test_pipeline.py
@@ -98,6 +104,18 @@ PYTHONPATH=src python3 -m bike_share_resilience.pipeline \
   --report-dir /DATA/HJ/prj/data-scientist-career/reports
 ```
 
+station-level 확장 실행:
+
+```bash
+scripts/run_station_level.sh
+```
+
+네트워크 없는 smoke 실행:
+
+```bash
+SYNTHETIC_FLAG=--synthetic TOP_STATIONS=10 OUTPUT_ROOT=/tmp/bike-share-station-smoke scripts/run_station_level.sh
+```
+
 ## 주요 산출물
 
 | 산출물 | 경로 |
@@ -109,14 +127,16 @@ PYTHONPATH=src python3 -m bike_share_resilience.pipeline \
 | 실험 추적기 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/experiment_tracker.csv` |
 | 예측구간 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/conformal_prediction_intervals.csv` |
 | 재배치 데모 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/rebalancing_optimization.csv` |
+| Station-level 보고서 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/reports/station_level_report.md` |
+| Station-level priority | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/reports/station_rebalancing_priority.csv` |
 | 그림 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/figures/` |
 
 ## 한계
 
-- UCI 데이터는 시스템 집계 자료라 정류장 좌표, dock capacity, 장애·점검, 이벤트, 요금 정보를 포함하지 않습니다.
+- UCI 데이터는 시스템 집계 자료라 정류장 좌표, dock capacity, 장애·점검, 이벤트, 요금 정보를 포함하지 않습니다. 이를 보완하기 위해 별도 station-level extension에서 Citi Bike trip history, GBFS station metadata, Open-Meteo weather를 결합했습니다.
 - 날씨 충격 분석은 인과 추정이 아니라 모델 기반 민감도 분석입니다.
-- 재배치 최적화는 실제 dispatch 정책이 아니라 station-level 데이터가 없을 때 가능한 구조적 데모입니다.
-- 실서비스 전환 전에는 station-level spatial feature, capacity constraint, prospective validation, drift monitoring이 필요합니다.
+- station-level extension도 아직 실시간 재고 부족 label은 없으므로 demand pressure proxy 기반 human review queue로 해석해야 합니다.
+- 실서비스 전환 전에는 historical station_status, 장애·점검, 이벤트, 요금, drift monitoring이 필요합니다.
 
 ## 면접에서 설명할 포인트
 

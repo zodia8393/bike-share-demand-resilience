@@ -17,6 +17,14 @@
 
 현재 버전은 UCI `hour.csv` 단일 공개 원천에 calendar/weather 변수가 함께 포함된 시스템 수준 자료입니다. 별도 외부 join은 수행하지 않았고, 시간 key는 `datetime = dteday + hr`로 일반화했습니다. station, 사용자, trip ID, 좌표 원본이 없어서 재식별 가능한 join key는 존재하지 않습니다.
 
+station-level extension은 별도 pipeline에서 다음 공개 원천을 실제 결합합니다.
+
+- Citi Bike Jersey City trip history `JC-202401`: `start_station_id`, `started_at`로 station-hour start demand를 생성합니다.
+- Citi Bike GBFS `station_information.json`: `short_name`을 trip `start_station_id`와 join해 station coordinate와 capacity를 결합합니다.
+- Open-Meteo historical hourly weather: `hour`를 기준으로 station-hour frame에 temperature, humidity, precipitation, wind를 결합합니다.
+
+raw ride_id와 raw JSON/zip은 `/DATA`에만 저장하고 Git에는 포함하지 않습니다.
+
 향후 station-level 확장 시 join key는 다음 원칙을 따릅니다.
 
 - 시간: 1시간 또는 1일 단위로 bucketize합니다.

@@ -5,6 +5,7 @@
 1. 시간순 holdout에서 공공자전거 시간대별 수요 예측은 baseline 대비 얼마나 개선되는가?
 2. 출퇴근 피크, 악천후, 주말, 야간 segment에서 오차와 conformal coverage는 안정적으로 유지되는가?
 3. 예측값과 불확실성 폭을 재배치 staging target으로 바꾸면 운영자가 쓸 수 있는 의사결정 단위가 되는가?
+4. station-hour 수요와 station capacity, hourly weather를 결합하면 shortage-risk proxy 기반 human review queue를 만들 수 있는가?
 
 ## Evidence Plan
 
@@ -16,6 +17,7 @@
 - Uncertainty/robustness: bootstrap MAE confidence interval, split-conformal 90% interval, segment coverage, weather shock scenario를 산출한다.
 - Failure audit: commute peak, bad weather, weekend, night segment의 residual과 coverage를 분리한다.
 - Decision impact: conformal upper bound를 수요 bucket별 staging target으로 변환하고 fleet budget 제약 최적화를 실행한다.
+- Station-level extension: Jersey City trip history, GBFS station metadata, Open-Meteo weather를 결합해 station-hour demand forecast와 rebalancing priority를 산출한다.
 
 ## 한계와 윤리
 

@@ -27,7 +27,7 @@ jobs:
           python -m pip install -r requirements.txt
 
       - name: Syntax check
-        run: python -m py_compile src/bike_share_resilience/pipeline.py tests/test_pipeline.py
+        run: python -m py_compile src/bike_share_resilience/pipeline.py src/bike_share_resilience/station_pipeline.py tests/test_pipeline.py tests/test_station_pipeline.py
 
       - name: Unit tests
         run: PYTHONPATH=src python -m pytest tests -q
@@ -37,6 +37,13 @@ jobs:
           OUTPUT_ROOT: ${{ runner.temp }}/bike-share-demand-resilience
           REPORT_DIR: ${{ runner.temp }}/bike-share-demand-reports
         run: scripts/run_all.sh
+
+      - name: Station-level synthetic smoke run
+        env:
+          OUTPUT_ROOT: ${{ runner.temp }}/bike-share-demand-resilience
+          SYNTHETIC_FLAG: --synthetic
+          TOP_STATIONS: "10"
+        run: scripts/run_station_level.sh
 
       - name: Quality gate assertion
         env:
@@ -51,4 +58,19 @@ jobs:
           summary = json.loads(summary_path.read_text(encoding="utf-8"))
           assert summary["quality_gate_passed"] is True, summary.get("failed_quality_gates")
           print("quality_gate_passed=True")
+          PY
+
+      - name: Station-level quality gate assertion
+        env:
+          OUTPUT_ROOT: ${{ runner.temp }}/bike-share-demand-resilience
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          summary_path = Path(os.environ["OUTPUT_ROOT"]) / "station_level" / "reports" / "station_run_summary.json"
+          summary = json.loads(summary_path.read_text(encoding="utf-8"))
+          assert summary["quality_gate_passed"] is True, summary.get("failed_quality_gates")
+          print("station_quality_gate_passed=True")
           PY
