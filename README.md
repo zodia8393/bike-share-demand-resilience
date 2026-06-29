@@ -108,22 +108,9 @@ PYTHONPATH=src python3 -m bike_share_resilience.pipeline \
 | 데이터 계약 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/data_source_and_contract.md` |
 | 모델 지표 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/model_metrics.csv` |
 | 실험 추적기 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/experiment_tracker.csv` |
-| 품질 게이트 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/quality_gate_checks.csv` |
 | 예측구간 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/conformal_prediction_intervals.csv` |
 | 재배치 데모 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/rebalancing_optimization.csv` |
 | 그림 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/figures/` |
-
-## 품질 게이트
-
-pipeline은 실행 시 다음 조건을 CSV로 남깁니다.
-
-- 원천 데이터 계약: 17,000행 이상, target `cnt` 포함
-- 시간 순서 분할: train > valid > 0, test > 0
-- 예측 성능: WAPE <= 20%, R2 >= 0.90
-- 불확실성 보정: 90% conformal coverage가 0.88~0.96 범위
-- 부트스트랩 안정성: 테스트 MAE가 95% bootstrap CI 내부
-- 운영 의사결정 연결: 재배치 최적화 산출물 생성
-- 문서 재현성: 최종 보고서, 모델 카드, 데이터 계약, 실험 추적기 생성
 
 ## 한계
 
@@ -139,13 +126,3 @@ pipeline은 실행 시 다음 조건을 CSV로 남깁니다.
 - MAPE만 보지 않고 WAPE/sMAPE/MAE CI를 함께 보고한 이유
 - conformal interval을 운영 의사결정의 보수성 기준으로 연결한 방식
 - 공개 데이터의 한계를 인정하고 station-level 확장 설계를 분리한 점
-
-## 문서 정책
-
-본문은 한글로 작성하고, code/API/model/file path/metric name은 English 표기를 유지합니다. 자세한 문체 규칙은 `KR_DOCS_POLICY.md`를 따릅니다.
-
-마감 점검:
-
-- AI 텍스트 티 제거 체크: 예
-- 실제 수행 근거(파일/명령/지표) 기재 여부: 예
-- 문서가 추정이 아니라 관찰·측정 기반인지: 예

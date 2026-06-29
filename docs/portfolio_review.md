@@ -30,9 +30,3 @@
 3. SHAP 또는 partial dependence로 feature effect 해석 강화
 4. MLflow 또는 lightweight registry로 실험 versioning 강화
 5. GitHub Actions로 `pytest`와 smoke run 자동화
-
-## 문서 마감 점검
-
-- AI 텍스트 티 제거 체크: 예
-- 실제 수행 근거(파일/명령/지표) 기재 여부: 예
-- 문서가 추정이 아니라 관찰·측정 기반인지: 예

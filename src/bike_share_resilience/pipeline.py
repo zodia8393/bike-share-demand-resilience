@@ -922,17 +922,6 @@ def render_report(
     overall_metrics: dict,
 ) -> str:
     source_mode = "synthetic fallback 데이터" if metadata["fallback_used"] else "공개 UCI Bike Sharing Dataset"
-    quality_status = "통과" if bool(quality["passed"].all()) else "실패"
-    quality_display = quality.copy()
-    quality_display["passed"] = quality_display["passed"].map({True: "통과", False: "실패"})
-    quality_display = quality_display.rename(
-        columns={
-            "gate": "품질 게이트",
-            "passed": "결과",
-            "evidence": "근거",
-            "threshold": "판정 기준",
-        }
-    )
     report = f"""# 따릉이 수요 회복력 예측 연구
 
 수행 일시: {current_kst_date()}
@@ -1018,14 +1007,6 @@ def render_report(
 4. Conformal 구간 폭이 넓은 시간대는 자동 행동을 억제하고 수동 검토 대상으로 둡니다.
 5. 운영 자동화 전에는 dock capacity와 fleet availability 제약을 반드시 결합합니다.
 
-## 품질 게이트
-
-전체 판정: {quality_status}
-
-{markdown_table(quality_display)}
-
-이 표는 자기평가 점수가 아니라 실행 산출물과 수치 조건으로 판정합니다.
-
 ## 재현성
 
 ```bash
@@ -1044,15 +1025,9 @@ python3 -m pytest tests
 - 데이터 계약: `{paths.project_report_dir / 'data_source_and_contract.md'}`
 - Conformal 예측구간: `{paths.project_report_dir / 'conformal_prediction_intervals.csv'}`
 - 재배치 최적화: `{paths.project_report_dir / 'rebalancing_optimization.csv'}`
-- 품질 게이트: `{paths.project_report_dir / 'quality_gate_checks.csv'}`
+- 자동 검증 결과: `{paths.project_report_dir / 'quality_gate_checks.csv'}`
 - 그림: `{paths.figure_dir}`
 - 모델 파일: `{paths.model_dir / 'best_model.pkl'}`
-
-## 문서 마감 점검
-
-- AI 텍스트 티 제거 체크: 예
-- 실제 수행 근거(파일/명령/지표) 기재 여부: 예
-- 문서가 추정이 아니라 관찰·측정 기반인지: 예
 """
     return report
 
