@@ -27,19 +27,19 @@
 
 ## 핵심 수치
 
-| 항목 | 값 |
-|---|---:|
-| 시스템 수요 데이터 | UCI Bike Sharing Dataset, 17,379행 |
-| 선택 모델 | `gradient_boosting` |
-| 테스트 MAE / WAPE / R2 | 35.95건 / 15.36% / 0.933 |
-| Bootstrap MAE 95% CI | [34.31, 37.61] |
-| Split-conformal 90% coverage | 92.3% |
-| Station-level 데이터 | 35개 station, 25,200 station-hour rows |
-| GBFS join rate | 97.1% |
-| Station-level best MAE | 1.006 |
-| Snapshot readiness | 3 / 336 hourly snapshots |
-| Public deploy decision | `NO_GO` |
-| CI | GitHub Actions PASS, 14 tests |
+| 항목 | 값 | 의미 |
+|---|---:|---|
+| 시스템 수요 데이터 | UCI Bike Sharing Dataset, 17,379행 | 시간대별 수요 예측의 기준 데이터 |
+| 선택 모델 | `gradient_boosting` | baseline/Ridge보다 holdout 성능이 가장 안정적 |
+| 테스트 MAE / WAPE / R2 | 35.95건 / 15.36% / 0.933 | 평균 오차와 전체 패턴 설명력이 모두 양호 |
+| Bootstrap MAE 95% CI | [34.31, 37.61] | MAE가 우연한 단일 점수에 그치지 않음 |
+| Split-conformal 90% coverage | 92.3% | 예측구간이 목표 coverage를 충족 |
+| Station-level 데이터 | 35개 station, 25,200 station-hour rows | 집계 예측을 station 단위 운영 판단으로 확장 |
+| GBFS join rate | 97.1% | station metadata/status 결합 품질이 충분 |
+| Station-level best MAE | 1.006 | 점수 개선보다 부족 위험 순위 해석이 핵심 |
+| Snapshot readiness | 3 / 336 hourly snapshots | 2주 검증 데이터가 아직 부족 |
+| Public deploy decision | `NO_GO` | 검증 전 외부 공개를 보류 |
+| CI | GitHub Actions PASS, 14 tests | 재현 실행과 테스트가 자동 검증됨 |
 
 ## 얻은 인사이트
 
