@@ -39,7 +39,7 @@
 | Station-level best MAE | 1.006 | 점수 개선보다 부족 위험 순위 해석이 핵심 |
 | Snapshot readiness | 4 / 336 hourly snapshots | 2주 검증 데이터가 아직 부족 |
 | Public deploy decision | `NO_GO` | 검증 전 외부 공개를 보류 |
-| CI | GitHub Actions PASS, 16 tests | 재현 실행과 테스트가 자동 검증됨 |
+| CI | GitHub Actions PASS, 20 tests | 재현 실행과 테스트가 자동 검증됨 |
 
 ## 얻은 인사이트
 
@@ -69,7 +69,7 @@
 
 ## 현재 상태
 
-- CI: PASS, 16 tests.
+- CI: PASS, 20 tests.
 - Station snapshot monitor: 매시 실행.
 - Snapshot readiness: 4/336 snapshots, earliest ready at `2026-07-13T14:04:57+09:00`.
 - Prospective validation: evaluator implemented, current status `NOT_READY` until 2-week snapshot coverage is met.

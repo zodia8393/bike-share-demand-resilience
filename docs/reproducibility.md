@@ -81,6 +81,10 @@ PYTHONPATH=src python3 -m bike_share_resilience.station_snapshot_analysis \
   --output-root /DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience
 PYTHONPATH=src python3 -m bike_share_resilience.station_prospective_validation \
   --output-root /DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience
+PYTHONPATH=src python3 -m bike_share_resilience.station_readiness_notifications \
+  --output-root /DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience \
+  --phase ready-start \
+  --dry-run
 python3 scripts/check_public_deploy_readiness.py \
   --output-root /DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience \
   --report-only
@@ -116,6 +120,7 @@ scripts/run_station_dashboard.sh
 | `station_level/reports/station_prospective_validation.json` | true shortage prospective validation status |
 | `station_level/reports/station_prospective_validation_metrics.csv` | readiness 이후 baseline/model prospective metrics |
 | `station_level/reports/station_public_deploy_readiness.json` | public deploy readiness decision |
+| `station_level/reports/station_readiness_notification_state.json` | READY 전환과 validation 결과 Telegram 중복 발송 방지 state |
 
 ## 재현 확인 기준
 

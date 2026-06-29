@@ -27,7 +27,7 @@ jobs:
           python -m pip install -r requirements.txt
 
       - name: Syntax check
-        run: python -m py_compile src/bike_share_resilience/pipeline.py src/bike_share_resilience/station_pipeline.py src/bike_share_resilience/station_service.py src/bike_share_resilience/station_snapshot_analysis.py tests/test_pipeline.py tests/test_station_pipeline.py tests/test_station_service.py tests/test_station_snapshot_analysis.py scripts/capture_station_status_snapshot.py scripts/check_public_deploy_readiness.py
+        run: python -m py_compile src/bike_share_resilience/pipeline.py src/bike_share_resilience/station_pipeline.py src/bike_share_resilience/station_service.py src/bike_share_resilience/station_snapshot_analysis.py src/bike_share_resilience/station_prospective_validation.py src/bike_share_resilience/station_readiness_notifications.py tests/test_pipeline.py tests/test_station_pipeline.py tests/test_station_service.py tests/test_station_snapshot_analysis.py tests/test_station_prospective_validation.py tests/test_station_readiness_notifications.py scripts/capture_station_status_snapshot.py scripts/check_public_deploy_readiness.py
 
       - name: Unit tests
         run: PYTHONPATH=src python -m pytest tests -q

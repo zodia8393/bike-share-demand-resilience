@@ -18,9 +18,13 @@ station-level extension의 남은 핵심 리스크는 live `station_status`가 2
 2. inventory snapshot CSV 저장
 3. snapshot history와 next-snapshot shortage label panel 생성
 4. 2주 readiness report 갱신
-5. prospective shortage validation report 갱신
-6. public deploy readiness report 갱신
-7. cron watchdog용 success marker 생성
+5. readiness가 처음 `READY`가 되면 Telegram으로 "스냅샷 축적 완료, 검증 시작" 알림 발송
+6. prospective shortage validation report 갱신
+7. public deploy readiness report 갱신
+8. validation/deploy 결과가 바뀌면 Telegram 결과 알림 발송
+9. cron watchdog용 success marker 생성
+
+Telegram 알림은 `station_readiness_notification_state.json`에 readiness event와 validation result key를 저장해 중복 발송을 막는다. 따라서 매시간 monitor가 계속 돌아도 같은 readiness event에 대해 시작 알림은 한 번만 발송된다.
 
 ## Readiness Gate
 
@@ -41,6 +45,7 @@ station-level extension의 남은 핵심 리스크는 live `station_status`가 2
 - `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/reports/station_prospective_validation.json`
 - `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/reports/station_prospective_validation.md`
 - `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/reports/station_prospective_validation_metrics.csv`
+- `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/reports/station_readiness_notification_state.json`
 
 ## 현재 판단
 
@@ -60,4 +65,13 @@ station-level extension의 남은 핵심 리스크는 live `station_status`가 2
 ```bash
 PYTHONPATH=src python3 -m bike_share_resilience.station_prospective_validation \
   --output-root /DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience
+```
+
+Telegram readiness 알림 dry-run:
+
+```bash
+PYTHONPATH=src python3 -m bike_share_resilience.station_readiness_notifications \
+  --output-root /DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience \
+  --phase ready-start \
+  --dry-run
 ```
