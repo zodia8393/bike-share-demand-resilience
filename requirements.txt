@@ -5,3 +5,4 @@ matplotlib
 seaborn
 scipy
 pyarrow
+pytest
