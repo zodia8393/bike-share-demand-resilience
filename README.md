@@ -2,29 +2,28 @@
 
 [![ci](https://github.com/zodia8393/bike-share-demand-resilience/actions/workflows/ci.yml/badge.svg)](https://github.com/zodia8393/bike-share-demand-resilience/actions/workflows/ci.yml)
 
-공공자전거 시간대별 수요를 예측하고, 그 결과를 출퇴근 피크·악천후·재배치 우선순위 같은 운영 판단으로 연결한 end-to-end 데이터 프로젝트입니다.
+공공자전거 시간대별 수요 예측을 재배치 판단까지 연결한 프로젝트입니다. 핵심은 모델 점수뿐 아니라, 실패 구간·예측 불확실성·배포 보류 기준까지 함께 만든 것입니다.
 
 ## 결론
 
-이 프로젝트는 "수요를 얼마나 맞히는가"에서 끝내지 않고 "예측을 어떻게 운영 의사결정으로 바꿀 것인가"까지 구현했습니다.
+한 줄로 말하면, **시간대별 수요를 WAPE 15.36%, R2 0.933 수준으로 예측하고, 그 예측을 피크/악천후 리스크와 재배치 우선순위로 바꾼 프로젝트**입니다.
 
-- 시스템 단위 수요 예측: `gradient_boosting`, MAE 35.95건, WAPE 15.36%, R2 0.933.
-- 예측 불확실성: split-conformal 90% 구간 coverage 92.3%.
-- 운영 리스크: 출퇴근 피크와 악천후에서 평균 성능보다 높은 실패 가능성을 확인.
-- 의사결정 연결: 예측값과 불확실성을 재배치 staging target으로 변환.
-- Station-level 확장: 35개 station, trip + GBFS + weather + live inventory 결합.
-- 배포 판단: live snapshot이 아직 3/336개라 public deploy는 `NO_GO`. 2주 검증 전까지는 local dashboard/API만 사용.
+- 예측 모델: `gradient_boosting`, MAE 35.95건, WAPE 15.36%, R2 0.933.
+- 리스크 분석: 출퇴근 피크와 악천후에서 평균보다 더 흔들리는 구간을 확인.
+- 운영 연결: 예측값에 불확실성을 붙여 재배치 우선순위로 변환.
+- 데이터 확장: 35개 station의 trip, GBFS, weather, live inventory를 결합.
+- 배포 판단: live snapshot이 아직 3/336개라 외부 공개는 `NO_GO`.
 
 ## 무엇을 만들었나
 
 | 구성 | 한 줄 설명 |
 |---|---|
-| Demand forecasting pipeline | 시간순 split으로 hourly demand를 예측하고 baseline, Ridge, Gradient Boosting을 비교 |
-| Risk analysis | 출퇴근, 주말, 악천후 구간에서 모델이 어디서 흔들리는지 확인 |
-| Uncertainty layer | point forecast에 conformal interval을 붙여 운영 buffer로 사용 |
-| Rebalancing demo | 예측 수요와 fleet budget 제약을 이용해 재배치 우선순위를 산출 |
-| Station-level extension | trip history, GBFS station metadata/status, Open-Meteo weather를 station-hour 단위로 결합 |
-| Deploy gate | live inventory snapshot이 충분히 쌓이기 전까지 외부 공개를 막는 readiness check |
+| 수요 예측 파이프라인 | 시간순 split으로 시간대별 수요를 예측하고 baseline, Ridge, Gradient Boosting을 비교 |
+| 실패 구간 분석 | 출퇴근, 주말, 악천후 구간에서 모델이 어디서 흔들리는지 확인 |
+| 예측 불확실성 | 단일 예측값에 예측구간을 붙여 운영 buffer로 사용 |
+| 재배치 우선순위 | 예측 수요와 fleet budget 제약을 이용해 재배치 후보를 산출 |
+| Station-level 확장 | trip history, GBFS station metadata/status, Open-Meteo weather를 station-hour 단위로 결합 |
+| 배포 보류 기준 | live inventory snapshot이 충분히 쌓이기 전까지 외부 공개를 막는 readiness check |
 
 ## 핵심 수치
 
@@ -47,20 +46,20 @@
 - 시간순 검증이 핵심입니다. 랜덤 split을 쓰면 미래 패턴이 섞여 실제 배포 성능보다 좋아 보일 수 있습니다.
 - 평균 성능만으로는 부족합니다. 출퇴근 피크와 악천후 구간은 별도 리스크로 관리해야 합니다.
 - 악천후 시나리오에서 평균 예측 수요가 약 17% 낮아졌습니다. 날씨는 운영 보수성을 조정하는 신호로 쓸 수 있습니다.
-- Station-level 모델의 metric lift는 크지 않았습니다. 대신 station별 shortage risk ranking과 배포 gate를 만든 것이 더 중요한 산출물입니다.
+- Station-level 모델의 점수 개선폭은 크지 않았습니다. 대신 station별 부족 위험 순위와 배포 보류 기준을 만든 것이 더 중요한 산출물입니다.
 - live inventory는 현재 상태 데이터이지 과거 정답 label이 아닙니다. 그래서 2주 snapshot이 쌓이기 전까지는 공개 배포를 막았습니다.
 
-## 왜 이렇게 만들었나
+## 방법 선택 이유
 
 | 선택 | 이유 |
 |---|---|
-| 시간순 split | 실제 운영은 과거 데이터로 미래를 예측하므로 leakage를 막기 위해 사용 |
-| Baseline 비교 | 복잡한 모델이 단순 시간대 패턴보다 나은지 먼저 확인하기 위해 사용 |
-| 여러 metric | MAPE 하나로는 수요량 scale과 0 근처 값을 안정적으로 설명하기 어려워 MAE, WAPE, sMAPE, R2를 함께 사용 |
-| Conformal interval | 예측값 하나가 아니라 어느 정도 buffer가 필요한지 판단하기 위해 사용 |
-| Segment audit | 전체 평균에 가려지는 출퇴근·주말·악천후 실패를 찾기 위해 사용 |
-| Station-level join | 집계 수요 예측을 실제 station capacity와 inventory 판단으로 확장하기 위해 사용 |
-| Public deploy gate | 검증되지 않은 live snapshot을 production 성과처럼 과장하지 않기 위해 사용 |
+| 시간순 검증 | 랜덤 split은 미래 정보가 섞일 수 있어 실제 운영 성능을 과대평가합니다. |
+| Baseline 비교 | 복잡한 모델이 단순 시간대 패턴보다 정말 나은지 먼저 확인했습니다. |
+| 여러 metric | MAPE 하나로는 수요량 scale과 0 근처 값을 안정적으로 설명하기 어렵습니다. |
+| 예측구간 | 예측값 하나보다 "얼마나 여유를 둬야 하는가"가 운영에 더 중요합니다. |
+| 구간별 오차 분석 | 전체 평균에 가려지는 출퇴근·주말·악천후 실패를 찾기 위해 사용했습니다. |
+| Station-level 결합 | 집계 수요 예측을 실제 station capacity와 inventory 판단으로 확장했습니다. |
+| 배포 보류 기준 | 검증되지 않은 live snapshot을 production 성과처럼 과장하지 않기 위해 사용했습니다. |
 
 ## 대표 시각화
 
