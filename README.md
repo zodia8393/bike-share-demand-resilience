@@ -22,14 +22,16 @@
 | Public deploy decision | `NO_GO` until 2-week prospective validation readiness |
 | CI | GitHub Actions PASS, 14 tests |
 
-해석상 중요한 지점:
+## 핵심 인사이트
 
-- `historical_profile_median`, `ridge_regression`, `gradient_boosting`을 같은 시간순 holdout에서 비교했습니다.
-- `lag_1`, `hr`, `is_commute_peak`, `lag_24`, `lag_168`이 테스트 구간 순열 중요도 상위 feature였습니다.
-- 출퇴근 피크는 전체 평균보다 MAE가 높아 별도 운영 risk segment로 관리해야 합니다.
-- 악천후 시나리오는 관측 조건 대비 평균 예측 수요를 약 17% 낮추는 방향으로 나타났습니다.
-- 예측값과 conformal 반경을 수요 버킷별 staging target으로 변환해 fleet budget 제약 최적화까지 연결했습니다.
-- live station inventory는 매시 snapshot으로 자동 축적되며, 2주 coverage가 충족되기 전까지 public deployment는 의도적으로 막습니다.
+- 랜덤 분할은 이 문제에서 성능을 과대평가할 가능성이 큽니다. 그래서 모든 모델 비교를 시간순 holdout으로 고정하고, lag와 rolling feature도 과거 시점만 보도록 설계했습니다.
+- 시스템 단위 수요는 `gradient_boosting`이 가장 안정적이었습니다. 다만 출퇴근 피크는 전체 평균보다 오차가 커서, 운영 관점에서는 단일 평균 성능보다 peak risk segment 관리가 더 중요합니다.
+- 악천후 시나리오에서는 관측 조건 대비 평균 예측 수요가 약 17% 낮아졌습니다. 날씨 변수는 단순 설명 변수가 아니라 배차·재배치 보수성을 조정하는 운영 신호로 해석할 수 있습니다.
+- `lag_1`, `hr`, `is_commute_peak`, `lag_24`, `lag_168`이 테스트 구간 순열 중요도 상위 feature였습니다. 단기 관성, 시간대 주기성, 출퇴근 패턴이 수요 회복력의 핵심 축입니다.
+- Split-conformal coverage 92.3%는 point forecast를 그대로 믿지 않고, 예측 반경을 재배치 staging target에 반영할 수 있음을 보여줍니다.
+- Station-level 확장에서는 35개 station, 25,200개 station-hour panel, 97.1% GBFS join rate를 확보했습니다. 예측 프로젝트를 단순 점수 경쟁이 아니라 station capacity, live inventory, weather를 결합한 운영 의사결정 문제로 확장했습니다.
+- Station-level 모델 개선폭은 baseline MAE 1.025에서 best MAE 1.006으로 크지 않습니다. 이 프로젝트의 가치는 과장된 metric lift보다 shortage risk ranking, human review queue, public deploy gate까지 포함한 production-readiness 설계에 있습니다.
+- live inventory는 현재 상태 snapshot이지 과거 shortage label이 아닙니다. 그래서 현재 readiness 3/336 snapshots 단계에서는 public deployment를 `NO_GO`로 막고, 2주 prospective validation 이후에만 외부 공개를 재평가합니다.
 
 ## 대표 시각화
 
@@ -108,67 +110,73 @@
 └── requirements.txt
 ```
 
-대용량 데이터, 모델 pickle, 그림, 보고서 산출물은 Git에 넣지 않고 `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience`에 생성합니다.
+대용량 데이터, 모델 pickle, 그림, 보고서 산출물은 Git에 넣지 않습니다. 산출물 위치는 `OUTPUT_ROOT`로 지정하며, 아래에는 로컬 절대경로 대신 재생성 명령과 `OUTPUT_ROOT` 기준 상대 위치를 문서화합니다.
 
 ## 실행 방법
 
 ```bash
-cd /workspace/prj/data-scientist-career/bike-share-demand-resilience
+git clone https://github.com/zodia8393/bike-share-demand-resilience.git
+cd bike-share-demand-resilience
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
+export OUTPUT_ROOT=/tmp/bike-share-demand-resilience
+export REPORT_DIR=/tmp/bike-share-demand-resilience/portfolio_reports
 scripts/run_all.sh
 ```
+
+아래 산출물 관련 명령은 같은 shell에서 `OUTPUT_ROOT`를 지정한 상태를 기준으로 합니다.
 
 테스트만 실행:
 
 ```bash
-cd /workspace/prj/data-scientist-career/bike-share-demand-resilience
 PYTHONPATH=src python3 -m pytest tests -q
 ```
 
 pipeline 직접 실행:
 
 ```bash
+export OUTPUT_ROOT=/tmp/bike-share-demand-resilience
+export REPORT_DIR=/tmp/bike-share-demand-resilience/portfolio_reports
 PYTHONPATH=src python3 -m bike_share_resilience.pipeline \
-  --output-root /DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience \
-  --report-dir /DATA/HJ/prj/data-scientist-career/reports
+  --output-root "$OUTPUT_ROOT" \
+  --report-dir "$REPORT_DIR"
 ```
 
 station-level 확장 실행:
 
 ```bash
-scripts/run_station_level.sh
+OUTPUT_ROOT=/tmp/bike-share-demand-resilience scripts/run_station_level.sh
 ```
 
 live inventory snapshot 캡처:
 
 ```bash
-python3 scripts/capture_station_status_snapshot.py
+python3 scripts/capture_station_status_snapshot.py --output-root "$OUTPUT_ROOT"
 ```
 
 station dashboard/API artifact check:
 
 ```bash
-PYTHONPATH=src python3 -m bike_share_resilience.station_service --check
+PYTHONPATH=src python3 -m bike_share_resilience.station_service --output-root "$OUTPUT_ROOT" --check
 ```
 
 2주 snapshot readiness와 배포 전 gate 갱신:
 
 ```bash
-scripts/run_station_snapshot_monitor.sh
+OUTPUT_ROOT=/tmp/bike-share-demand-resilience scripts/run_station_snapshot_monitor.sh
 ```
 
 public deploy readiness 확인:
 
 ```bash
-python3 scripts/check_public_deploy_readiness.py --report-only
+python3 scripts/check_public_deploy_readiness.py --output-root "$OUTPUT_ROOT" --report-only
 ```
 
 local dashboard 실행:
 
 ```bash
-scripts/run_station_dashboard.sh
+OUTPUT_ROOT=/tmp/bike-share-demand-resilience scripts/run_station_dashboard.sh
 ```
 
 네트워크 없는 smoke 실행:
@@ -177,25 +185,24 @@ scripts/run_station_dashboard.sh
 SYNTHETIC_FLAG=--synthetic TOP_STATIONS=10 OUTPUT_ROOT=/tmp/bike-share-station-smoke scripts/run_station_level.sh
 ```
 
-## 주요 산출물
+## 산출물 확인 방법
 
-| 산출물 | 경로 |
-|---|---|
-| 최종 보고서 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/final_report.md` |
-| 모델 카드 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/model_card.md` |
-| 데이터 계약 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/data_source_and_contract.md` |
-| 모델 지표 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/model_metrics.csv` |
-| 실험 추적기 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/experiment_tracker.csv` |
-| 예측구간 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/conformal_prediction_intervals.csv` |
-| 재배치 데모 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/rebalancing_optimization.csv` |
-| Station-level 보고서 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/reports/station_level_report.md` |
-| Station-level priority | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/reports/station_rebalancing_priority.csv` |
-| Station-level inventory snapshot | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/data/processed/station_inventory_snapshot.csv` |
-| Station inventory history | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/data/processed/station_inventory_history.csv` |
-| Station shortage label panel | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/data/processed/station_shortage_label_panel.csv` |
-| Snapshot readiness | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/reports/station_snapshot_readiness.json` |
-| Public deploy readiness | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/reports/station_public_deploy_readiness.json` |
-| 그림 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/figures/` |
+이 repo는 reviewer가 GitHub에서 바로 판단할 수 있도록 핵심 프로토콜과 의사결정 문서는 `docs/`에 커밋하고, 대용량 실행 산출물은 `OUTPUT_ROOT` 아래에 재생성합니다. 절대경로 대신 아래 artifact contract를 기준으로 확인합니다.
+
+| 확인하려는 내용 | 생성 명령 | `OUTPUT_ROOT` 기준 상대 위치 |
+|---|---|---|
+| 최종 보고서, 모델 카드, 데이터 계약 | `scripts/run_all.sh` | `reports/final_report.md`, `reports/model_card.md`, `reports/data_source_and_contract.md` |
+| 모델 비교와 실험 추적 | `scripts/run_all.sh` | `reports/model_metrics.csv`, `reports/experiment_tracker.csv` |
+| 불확실성·오차 감사 | `scripts/run_all.sh` | `reports/conformal_prediction_intervals.csv`, `reports/residual_segment_audit.csv`, `reports/bootstrap_mae_ci.csv` |
+| 재배치 최적화 데모 | `scripts/run_all.sh` | `reports/rebalancing_optimization.csv` |
+| 시각화 | `scripts/run_all.sh` | `figures/` |
+| Station-level 보고서와 우선순위 | `scripts/run_station_level.sh` | `station_level/reports/station_level_report.md`, `station_level/reports/station_rebalancing_priority.csv` |
+| Station inventory snapshot/history | `scripts/run_station_snapshot_monitor.sh` | `station_level/data/processed/station_inventory_snapshot.csv`, `station_level/data/processed/station_inventory_history.csv` |
+| Prospective shortage label panel | `scripts/run_station_snapshot_monitor.sh` | `station_level/data/processed/station_shortage_label_panel.csv` |
+| 2주 snapshot readiness | `scripts/run_station_snapshot_monitor.sh` | `station_level/reports/station_snapshot_readiness.json` |
+| Public deploy gate | `scripts/check_public_deploy_readiness.py --report-only` | `station_level/reports/station_public_deploy_readiness.json` |
+
+커밋된 문서로 먼저 검토하려면 [docs/modeling_protocol.md](docs/modeling_protocol.md), [docs/station_level_extension.md](docs/station_level_extension.md), [docs/prospective_shortage_validation.md](docs/prospective_shortage_validation.md), [docs/public_deployment_decision.md](docs/public_deployment_decision.md)를 보면 됩니다.
 
 ## 한계
 
