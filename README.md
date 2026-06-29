@@ -12,7 +12,7 @@
 - 리스크 분석: 출퇴근 피크와 악천후에서 평균보다 더 흔들리는 구간을 확인.
 - 운영 연결: 예측값에 불확실성을 붙여 재배치 우선순위로 변환.
 - 데이터 확장: 35개 station의 trip, GBFS, weather, live inventory를 결합.
-- 배포 판단: live snapshot이 아직 3/336개라 외부 공개는 `NO_GO`.
+- 배포 판단: live snapshot이 아직 4/336개라 외부 공개는 `NO_GO`.
 
 ## 무엇을 만들었나
 
@@ -37,9 +37,9 @@
 | Station-level 데이터 | 35개 station, 25,200 station-hour rows | 집계 예측을 station 단위 운영 판단으로 확장 |
 | GBFS join rate | 97.1% | station metadata/status 결합 품질이 충분 |
 | Station-level best MAE | 1.006 | 점수 개선보다 부족 위험 순위 해석이 핵심 |
-| Snapshot readiness | 3 / 336 hourly snapshots | 2주 검증 데이터가 아직 부족 |
+| Snapshot readiness | 4 / 336 hourly snapshots | 2주 검증 데이터가 아직 부족 |
 | Public deploy decision | `NO_GO` | 검증 전 외부 공개를 보류 |
-| CI | GitHub Actions PASS, 14 tests | 재현 실행과 테스트가 자동 검증됨 |
+| CI | GitHub Actions PASS, 16 tests | 재현 실행과 테스트가 자동 검증됨 |
 
 ## 얻은 인사이트
 
@@ -69,9 +69,10 @@
 
 ## 현재 상태
 
-- CI: PASS, 14 tests.
+- CI: PASS, 16 tests.
 - Station snapshot monitor: 매시 실행.
-- Snapshot readiness: 3/336 snapshots, earliest ready at `2026-07-13T14:04:57+09:00`.
+- Snapshot readiness: 4/336 snapshots, earliest ready at `2026-07-13T14:04:57+09:00`.
+- Prospective validation: evaluator implemented, current status `NOT_READY` until 2-week snapshot coverage is met.
 - Public deployment: `NO_GO`. 현재는 local dashboard/API만 사용.
 
 ## Repo 구조

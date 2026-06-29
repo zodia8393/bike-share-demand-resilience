@@ -15,6 +15,8 @@ cd /workspace/prj/data-scientist-career/bike-share-demand-resilience
 PYTHONPATH=src python3 -m bike_share_resilience.station_service \
   --output-root /DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience \
   --check
+PYTHONPATH=src python3 -m bike_share_resilience.station_prospective_validation \
+  --output-root /DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience
 python3 scripts/check_public_deploy_readiness.py \
   --output-root /DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience
 ```
@@ -23,6 +25,7 @@ python3 scripts/check_public_deploy_readiness.py \
 
 - station API/dashboard artifact contract가 정상인지
 - 2주 snapshot readiness가 충족됐는지
+- true shortage prospective validation이 `PASS`인지
 - raw zip/parquet/pickle/database/status snapshot 같은 private/raw artifact가 Git에 tracked되지 않았는지
 - 배포 전 정리 항목이 남아 있지 않은지
 
@@ -33,6 +36,7 @@ python3 scripts/check_public_deploy_readiness.py \
 - local preview는 기본적으로 `127.0.0.1`에만 bind한다.
 - public host, auth, rate limit, cache policy는 별도 승인 후 결정한다.
 - readiness check가 `GO`가 되기 전에는 Fly.io/GitHub Pages/외부 host 배포를 하지 않는다.
+- 2주 snapshot이 쌓여도 prospective validation이 `PASS`가 아니면 성능 claim과 public deployment는 계속 보류한다.
 
 ## Reviewer용 현재 사용법
 

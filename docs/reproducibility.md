@@ -79,6 +79,8 @@ readiness만 직접 확인:
 ```bash
 PYTHONPATH=src python3 -m bike_share_resilience.station_snapshot_analysis \
   --output-root /DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience
+PYTHONPATH=src python3 -m bike_share_resilience.station_prospective_validation \
+  --output-root /DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience
 python3 scripts/check_public_deploy_readiness.py \
   --output-root /DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience \
   --report-only
@@ -111,6 +113,8 @@ scripts/run_station_dashboard.sh
 | `station_level/data/processed/station_inventory_history.csv` | hourly snapshot 누적 history |
 | `station_level/data/processed/station_shortage_label_panel.csv` | next-snapshot shortage prospective label panel |
 | `station_level/reports/station_snapshot_readiness.json` | 2주 snapshot readiness gate |
+| `station_level/reports/station_prospective_validation.json` | true shortage prospective validation status |
+| `station_level/reports/station_prospective_validation_metrics.csv` | readiness 이후 baseline/model prospective metrics |
 | `station_level/reports/station_public_deploy_readiness.json` | public deploy readiness decision |
 
 ## 재현 확인 기준
@@ -123,4 +127,5 @@ scripts/run_station_dashboard.sh
 - station-level 확장은 `station_quality_gate_checks.csv`가 모두 `True`이고 `station_run_summary.json`의 `quality_gate_passed`가 `true`입니다.
 - `station_service --check`가 `ok: true`를 반환하고 inventory snapshot row가 1개 이상입니다.
 - `station_snapshot_readiness.json`이 생성되고, 2주 coverage 전에는 `ready_for_prospective_validation=false`를 명확히 반환합니다.
+- `station_prospective_validation.json`이 생성되고, 2주 coverage 전에는 `validation_status=NOT_READY`를 명확히 반환합니다.
 - `station_public_deploy_readiness.json`이 생성되고, 배포 전 조건 미충족 시 `decision=NO_GO`를 반환합니다.

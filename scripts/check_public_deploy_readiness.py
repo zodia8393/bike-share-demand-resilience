@@ -55,12 +55,19 @@ def build_decision(output_root: Path) -> dict:
     snapshot_summary = analyze_snapshots(output_root, SnapshotReadinessConfig())
     service_payload = load_service_payload(output_root)
     service_errors = validate_service_payload(service_payload)
+    prospective_path = output_root / "station_level" / "reports" / "station_prospective_validation.json"
+    if prospective_path.is_file():
+        prospective_validation = json.loads(prospective_path.read_text(encoding="utf-8"))
+    else:
+        prospective_validation = {}
     publication_risks = tracked_publication_risks()
     blockers = []
     if service_errors:
         blockers.extend(f"service: {error}" for error in service_errors)
     if not snapshot_summary.get("ready_for_prospective_validation"):
         blockers.append("snapshot: two-week prospective validation coverage is not ready")
+    elif prospective_validation.get("validation_status") != "PASS":
+        blockers.append("prospective_validation: true shortage validation is not PASS")
     if publication_risks:
         blockers.append("repo: raw/private artifact paths are tracked")
     decision = "GO" if not blockers else "NO_GO"
@@ -78,6 +85,7 @@ def build_decision(output_root: Path) -> dict:
         ],
         "service_health": service_health,
         "snapshot_readiness": snapshot_summary,
+        "prospective_validation": prospective_validation,
         "tracked_publication_risks": publication_risks,
     }
 

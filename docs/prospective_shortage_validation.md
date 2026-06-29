@@ -18,8 +18,9 @@ station-level extension의 남은 핵심 리스크는 live `station_status`가 2
 2. inventory snapshot CSV 저장
 3. snapshot history와 next-snapshot shortage label panel 생성
 4. 2주 readiness report 갱신
-5. public deploy readiness report 갱신
-6. cron watchdog용 success marker 생성
+5. prospective shortage validation report 갱신
+6. public deploy readiness report 갱신
+7. cron watchdog용 success marker 생성
 
 ## Readiness Gate
 
@@ -37,16 +38,26 @@ station-level extension의 남은 핵심 리스크는 live `station_status`가 2
 - `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/reports/station_snapshot_readiness.md`
 - `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/data/processed/station_inventory_history.csv`
 - `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/data/processed/station_shortage_label_panel.csv`
+- `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/reports/station_prospective_validation.json`
+- `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/reports/station_prospective_validation.md`
+- `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/reports/station_prospective_validation_metrics.csv`
 
 ## 현재 판단
 
-2026-06-29 KST 기준으로 자동 축적은 시작됐지만 2주 coverage는 아직 충족되지 않았다. 따라서 shortage-risk model claim과 public deployment decision은 `NO_GO`로 유지한다. 다만 automation이 계속 실행되면 2026-07-13 KST 이후 readiness gate가 충족될 수 있다.
+2026-06-29 KST 기준으로 자동 축적은 시작됐지만 2주 coverage는 아직 충족되지 않았다. 따라서 shortage-risk model claim과 public deployment decision은 `NO_GO`로 유지한다. `station_prospective_validation`은 현재 `NOT_READY` 리포트를 생성하며, readiness가 `READY`가 되는 즉시 같은 label panel로 persistence baseline, station-hour profile baseline, logistic inventory model을 시간순 split에서 비교한다. 다만 automation이 계속 실행되면 2026-07-13 KST 이후 readiness gate가 충족될 수 있다.
 
 ## 다음 전환 조건
 
 `station_snapshot_readiness.json`의 `ready_for_prospective_validation`이 `true`가 되면 다음 작업을 수행한다.
 
-1. `station_shortage_label_panel.csv`를 기준으로 shortage-risk baseline과 main model을 분리한다.
+1. `station_shortage_label_panel.csv`를 기준으로 shortage-risk baseline과 main model을 자동 평가한다.
 2. time-based prospective split으로 next-snapshot shortage 예측을 평가한다.
 3. station-level priority output에 true shortage calibration metric을 추가한다.
 4. public deploy readiness check를 다시 실행한다.
+
+수동 검증:
+
+```bash
+PYTHONPATH=src python3 -m bike_share_resilience.station_prospective_validation \
+  --output-root /DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience
+```
