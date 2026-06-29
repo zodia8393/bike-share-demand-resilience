@@ -1,61 +1,145 @@
-# 따릉이 대여 수요 회복력 예측
+# 따릉이 수요 회복력 예측 연구
 
-서울시 공공자전거 대여 수요를 시간 단위로 예측한다. 목표는 급변 구간에서의 수요 복원력을 측정해 운영 판단에 바로 쓸 수 있는 근거를 남기는 것이다.
+시간대별 공공자전거 수요를 예측하고, 출퇴근 피크·악천후·주말 수요 구간에서 모델이 얼마나 안정적으로 작동하는지 검증한 연구형 데이터 사이언스 포트폴리오입니다. 단순 예측 점수보다 운영 의사결정에 필요한 기준선 비교, 시간순 검증, 예측구간, 구간별 오차 감사, 제약 기반 재배치 데모를 한 pipeline으로 묶었습니다.
 
-## 프로젝트 개요
+## 핵심 결과
 
-- 출처: UCI Bike Sharing 공개 데이터셋
-- 문제: 시간대별 대여 수요 예측
-- 핵심 범위: 시간 인식 분할, 피처 엔지니어링, 모델 비교, 오차 감사, 예측 신뢰구간, 운영 의사결정 연동
+최근 재현 실행 기준:
 
-## 왜 이 작업을 했는가
+| 항목 | 값 |
+|---|---:|
+| 데이터 | UCI Bike Sharing Dataset, 17,379행 |
+| 선택 모델 | `gradient_boosting` |
+| 테스트 MAE | 35.95건 |
+| 테스트 WAPE | 15.36% |
+| 테스트 R2 | 0.933 |
+| Bootstrap MAE 95% CI | [34.31, 37.61] |
+| Split-conformal 90% coverage | 92.3% |
 
-운영자가 단기 예측 수치를 받는 것만으로는 부족하다는 판단이 있었기 때문입니다.
+해석상 중요한 지점:
 
-- 기준선 대비 성능 비교 지표를 남긴다.
-- 구간별 오차 특성을 확인해 과도한 기대를 줄인다.
-- 제약 조건(시간대, 차량 가용량)이 있는 운영 제안까지 이어지도록 한다.
+- `historical_profile_median`, `ridge_regression`, `gradient_boosting`을 같은 시간순 holdout에서 비교했습니다.
+- `lag_1`, `hr`, `is_commute_peak`, `lag_24`, `lag_168`이 테스트 구간 순열 중요도 상위 feature였습니다.
+- 출퇴근 피크는 전체 평균보다 MAE가 높아 별도 운영 risk segment로 관리해야 합니다.
+- 악천후 시나리오는 관측 조건 대비 평균 예측 수요를 약 17% 낮추는 방향으로 나타났습니다.
+- 예측값과 conformal 반경을 수요 버킷별 staging target으로 변환해 fleet budget 제약 최적화까지 연결했습니다.
+
+## 연구 질문
+
+1. 시간순 분할을 보존했을 때 공공자전거 시간대별 수요를 어느 수준까지 예측할 수 있는가?
+2. 전체 평균 성능이 아니라 출퇴근·주말·악천후 구간에서 어떤 실패 패턴이 나타나는가?
+3. point forecast를 운영자가 검토 가능한 불확실성 구간과 재배치 target으로 변환할 수 있는가?
+
+## 방법론
+
+| 단계 | 설계 |
+|---|---|
+| 데이터 계약 | UCI 원천 zip 다운로드, raw CSV 보존, source metadata와 data dictionary 생성 |
+| 피처 엔지니어링 | 달력, 시간대, 출퇴근 window, 악천후 flag, `temp_x_hum`, 1/24/168시간 lag, shift된 rolling mean |
+| 분할 | 시간순 train/valid/test 분할. 랜덤 분할 금지 |
+| 기준선 | 근무일 여부와 시간대별 중앙값 profile |
+| 모델 | Ridge regression, Gradient Boosting Regressor |
+| 검증 | holdout metrics, `TimeSeriesSplit`, bootstrap MAE CI, split-conformal coverage |
+| 해석 | residual segment audit, permutation importance, weather shock scenario |
+| 의사결정 | conformal radius를 반영한 demand bucket staging target과 linear programming allocation |
+
+## Repo 구조
+
+```text
+.
+├── README.md
+├── KR_DOCS_POLICY.md
+├── docs/
+│   ├── data_contract.md
+│   ├── modeling_protocol.md
+│   ├── portfolio_review.md
+│   └── reproducibility.md
+├── scripts/
+│   └── run_all.sh
+├── src/bike_share_resilience/
+│   ├── __init__.py
+│   └── pipeline.py
+├── tests/
+│   ├── conftest.py
+│   └── test_pipeline.py
+├── pyproject.toml
+└── requirements.txt
+```
+
+대용량 데이터, 모델 pickle, 그림, 보고서 산출물은 Git에 넣지 않고 `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience`에 생성합니다.
 
 ## 실행 방법
 
 ```bash
 cd /workspace/prj/data-scientist-career/bike-share-demand-resilience
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
 scripts/run_all.sh
 ```
 
-테스트만 실행하려면:
+테스트만 실행:
 
 ```bash
-python3 tests/test_pipeline.py
+cd /workspace/prj/data-scientist-career/bike-share-demand-resilience
+PYTHONPATH=src python3 -m pytest tests -q
 ```
 
-## 산출물 경로
+pipeline 직접 실행:
 
-- `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/data`
-- `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/figures`
-- `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/models`
-- `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports`
-- `/DATA/HJ/prj/data-scientist-career/reports`
+```bash
+PYTHONPATH=src python3 -m bike_share_resilience.pipeline \
+  --output-root /DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience \
+  --report-dir /DATA/HJ/prj/data-scientist-career/reports
+```
 
-## 방법론
+## 주요 산출물
 
-- 시간 인식 분할: 시점 누수 방지 목적
-- 피처: 달력, 계절성, 날씨 지표, 1/24/168시간 lag, 이동평균, 상호작용 항목
-- 기준선: 시간별 중앙값 프로파일, Ridge 회귀
-- 본선: Gradient Boosting Regressor
-- 검증: Holdout MAE, WAPE/sMAPE/MAPE, 시계열 교차검증
-- 불확실성: MAE 부트스트랩 신뢰구간, Split-Conformal 신뢰구간
-- 해석: 순열 중요도, 날씨 충격 민감도, 구간별 잔차
-- 운영 연동: 수요 구간별 스테이징 타깃 + 차량 예산 제약 최적화
+| 산출물 | 경로 |
+|---|---|
+| 최종 보고서 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/final_report.md` |
+| 모델 카드 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/model_card.md` |
+| 데이터 계약 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/data_source_and_contract.md` |
+| 모델 지표 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/model_metrics.csv` |
+| 실험 추적기 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/experiment_tracker.csv` |
+| 품질 게이트 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/quality_gate_checks.csv` |
+| 예측구간 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/conformal_prediction_intervals.csv` |
+| 재배치 데모 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/rebalancing_optimization.csv` |
+| 그림 | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/figures/` |
 
-## 산출물
+## 품질 게이트
 
-- 최종 보고서: `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/final_report.md`
-- 모델 카드: `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/model_card.md`
-- 실험 추적기: `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/experiment_tracker.csv`
-- Conformal 신뢰구간: `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/conformal_prediction_intervals.csv`
-- 재배치 최적화 결과: `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/reports/rebalancing_optimization.csv`
-- 핵심 그림:
-  - `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/figures/uncertainty_conformal_intervals.png`
-  - `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/figures/optimization_rebalancing_allocation.png`
-  - `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/figures/interpretation_permutation_importance.png`
+pipeline은 실행 시 다음 조건을 CSV로 남깁니다.
+
+- 원천 데이터 계약: 17,000행 이상, target `cnt` 포함
+- 시간 순서 분할: train > valid > 0, test > 0
+- 예측 성능: WAPE <= 20%, R2 >= 0.90
+- 불확실성 보정: 90% conformal coverage가 0.88~0.96 범위
+- 부트스트랩 안정성: 테스트 MAE가 95% bootstrap CI 내부
+- 운영 의사결정 연결: 재배치 최적화 산출물 생성
+- 문서 재현성: 최종 보고서, 모델 카드, 데이터 계약, 실험 추적기 생성
+
+## 한계
+
+- UCI 데이터는 시스템 집계 자료라 정류장 좌표, dock capacity, 장애·점검, 이벤트, 요금 정보를 포함하지 않습니다.
+- 날씨 충격 분석은 인과 추정이 아니라 모델 기반 민감도 분석입니다.
+- 재배치 최적화는 실제 dispatch 정책이 아니라 station-level 데이터가 없을 때 가능한 구조적 데모입니다.
+- 실서비스 전환 전에는 station-level spatial feature, capacity constraint, prospective validation, drift monitoring이 필요합니다.
+
+## 면접에서 설명할 포인트
+
+- 랜덤 split 대신 시간순 split을 쓴 이유와 누수 차단 방식
+- baseline을 두고 nonlinear model을 비교한 이유
+- MAPE만 보지 않고 WAPE/sMAPE/MAE CI를 함께 보고한 이유
+- conformal interval을 운영 의사결정의 보수성 기준으로 연결한 방식
+- 공개 데이터의 한계를 인정하고 station-level 확장 설계를 분리한 점
+
+## 문서 정책
+
+본문은 한글로 작성하고, code/API/model/file path/metric name은 English 표기를 유지합니다. 자세한 문체 규칙은 `KR_DOCS_POLICY.md`를 따릅니다.
+
+마감 점검:
+
+- AI 텍스트 티 제거 체크: 예
+- 실제 수행 근거(파일/명령/지표) 기재 여부: 예
+- 문서가 추정이 아니라 관찰·측정 기반인지: 예

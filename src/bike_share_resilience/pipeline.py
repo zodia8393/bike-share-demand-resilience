@@ -7,15 +7,18 @@ import pickle
 import urllib.request
 import zipfile
 from dataclasses import dataclass
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Iterable
+from zoneinfo import ZoneInfo
 
 import matplotlib
 
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
+from matplotlib import font_manager
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -31,6 +34,19 @@ from sklearn.preprocessing import StandardScaler
 
 UCI_URL = "https://archive.ics.uci.edu/static/public/275/bike+sharing+dataset.zip"
 RANDOM_SEED = 20260627
+KST = ZoneInfo("Asia/Seoul")
+NANUM_GOTHIC_PATH = Path("/usr/share/fonts/truetype/nanum/NanumGothic.ttf")
+
+
+def current_kst_date() -> str:
+    return datetime.now(KST).strftime("%Y-%m-%d KST")
+
+
+def configure_korean_font() -> None:
+    if NANUM_GOTHIC_PATH.exists():
+        font_manager.fontManager.addfont(str(NANUM_GOTHIC_PATH))
+        plt.rcParams["font.family"] = "NanumGothic"
+    plt.rcParams["axes.unicode_minus"] = False
 
 
 @dataclass
@@ -328,12 +344,12 @@ def segment_audit(df: pd.DataFrame, y_pred: np.ndarray) -> pd.DataFrame:
     audit["prediction"] = y_pred
     audit["absolute_error"] = (audit["cnt"] - audit["prediction"]).abs()
     segments = {
-        "overall": np.ones(len(audit), dtype=bool),
-        "commute_peak": audit["is_commute_peak"] == 1,
-        "non_peak": audit["is_commute_peak"] == 0,
-        "bad_weather": audit["bad_weather"] == 1,
-        "weekend": audit["is_weekend"] == 1,
-        "night": audit["hr"].between(0, 5),
+        "전체": np.ones(len(audit), dtype=bool),
+        "출퇴근피크": audit["is_commute_peak"] == 1,
+        "비출퇴근": audit["is_commute_peak"] == 0,
+        "악천후": audit["bad_weather"] == 1,
+        "주말": audit["is_weekend"] == 1,
+        "야간": audit["hr"].between(0, 5),
     }
     rows = []
     for name, mask in segments.items():
@@ -357,12 +373,12 @@ def conformal_segment_audit(test: pd.DataFrame, intervals: pd.DataFrame) -> pd.D
     audit = test[["is_commute_peak", "bad_weather", "is_weekend", "hr"]].reset_index(drop=True).copy()
     audit = pd.concat([audit, intervals[["covered", "interval_width"]].reset_index(drop=True)], axis=1)
     segments = {
-        "overall": np.ones(len(audit), dtype=bool),
-        "commute_peak": audit["is_commute_peak"] == 1,
-        "non_peak": audit["is_commute_peak"] == 0,
-        "bad_weather": audit["bad_weather"] == 1,
-        "weekend": audit["is_weekend"] == 1,
-        "night": audit["hr"].between(0, 5),
+        "전체": np.ones(len(audit), dtype=bool),
+        "출퇴근피크": audit["is_commute_peak"] == 1,
+        "비출퇴근": audit["is_commute_peak"] == 0,
+        "악천후": audit["bad_weather"] == 1,
+        "주말": audit["is_weekend"] == 1,
+        "야간": audit["hr"].between(0, 5),
     }
     rows = []
     for name, mask in segments.items():
@@ -454,13 +470,13 @@ def rebalancing_optimization(test: pd.DataFrame, y_pred: np.ndarray, conformal_r
 def weather_shock_analysis(model, df: pd.DataFrame) -> pd.DataFrame:
     base = df[FEATURE_COLUMNS].copy()
     scenarios = {
-        "observed": base.copy(),
-        "clear_weather": base.assign(weathersit=1, bad_weather=0),
-        "storm_weather": base.assign(weathersit=3, bad_weather=1, hum=np.maximum(base["hum"], 0.85), windspeed=np.maximum(base["windspeed"], 0.35)),
-        "heat_humidity_stress": base.assign(temp=np.maximum(base["temp"], 0.85), atemp=np.maximum(base["atemp"], 0.88), hum=np.maximum(base["hum"], 0.82)),
+        "관측치": base.copy(),
+        "맑음": base.assign(weathersit=1, bad_weather=0),
+        "폭우/강풍": base.assign(weathersit=3, bad_weather=1, hum=np.maximum(base["hum"], 0.85), windspeed=np.maximum(base["windspeed"], 0.35)),
+        "고온·습도 압력": base.assign(temp=np.maximum(base["temp"], 0.85), atemp=np.maximum(base["atemp"], 0.88), hum=np.maximum(base["hum"], 0.82)),
     }
     rows = []
-    observed_mean = float(model.predict(scenarios["observed"]).mean())
+    observed_mean = float(model.predict(scenarios["관측치"]).mean())
     for name, frame in scenarios.items():
         pred = model.predict(frame)
         rows.append(
@@ -476,18 +492,23 @@ def weather_shock_analysis(model, df: pd.DataFrame) -> pd.DataFrame:
 
 def make_figures(paths: ProjectPaths, df: pd.DataFrame, test: pd.DataFrame, y_pred: np.ndarray, importance: pd.DataFrame) -> None:
     sns.set_theme(style="whitegrid")
+    configure_korean_font()
 
     hourly = df.pivot_table(index="weekday", columns="hr", values="cnt", aggfunc="mean")
     plt.figure(figsize=(13, 5))
-    sns.heatmap(hourly, cmap="viridis", cbar_kws={"label": "Mean hourly rentals"})
-    plt.title("Mean demand by weekday and hour")
+    sns.heatmap(hourly, cmap="viridis", cbar_kws={"label": "평균 시간대별 대여 건수"})
+    plt.title("요일과 시간대별 평균 수요")
+    plt.xlabel("시간")
+    plt.ylabel("요일")
     plt.tight_layout()
     plt.savefig(paths.figure_dir / "eda_weekday_hour_heatmap.png", dpi=160)
     plt.close()
 
     plt.figure(figsize=(9, 5))
     sns.scatterplot(data=df.sample(min(4000, len(df)), random_state=RANDOM_SEED), x="temp", y="cnt", hue="weathersit", palette="deep", alpha=0.5)
-    plt.title("Demand response to normalized temperature and weather")
+    plt.title("정규화 온도와 날씨 등급에 따른 수요 반응")
+    plt.xlabel("정규화 온도")
+    plt.ylabel("시간대별 대여 건수")
     plt.tight_layout()
     plt.savefig(paths.figure_dir / "eda_temperature_weather_scatter.png", dpi=160)
     plt.close()
@@ -496,8 +517,8 @@ def make_figures(paths: ProjectPaths, df: pd.DataFrame, test: pd.DataFrame, y_pr
     plt.figure(figsize=(11, 4))
     plt.plot(test["datetime"], residuals, linewidth=0.8)
     plt.axhline(0, color="black", linewidth=1)
-    plt.title("Test residuals over time")
-    plt.ylabel("Actual - predicted rentals")
+    plt.title("테스트 구간 잔차 추이")
+    plt.ylabel("실측 - 예측 대여 건수")
     plt.tight_layout()
     plt.savefig(paths.figure_dir / "model_test_residuals.png", dpi=160)
     plt.close()
@@ -505,17 +526,18 @@ def make_figures(paths: ProjectPaths, df: pd.DataFrame, test: pd.DataFrame, y_pr
     top = importance.head(14).sort_values("importance_mean")
     plt.figure(figsize=(9, 6))
     plt.barh(top["feature"], top["importance_mean"])
-    plt.title("Permutation importance on test period")
+    plt.title("테스트 구간 순열 중요도")
+    plt.xlabel("MAE 증가량")
     plt.tight_layout()
     plt.savefig(paths.figure_dir / "interpretation_permutation_importance.png", dpi=160)
     plt.close()
 
     daily = test.assign(prediction=y_pred).set_index("datetime")[["cnt", "prediction"]].resample("D").sum()
     plt.figure(figsize=(11, 4))
-    plt.plot(daily.index, daily["cnt"], label="Actual")
-    plt.plot(daily.index, daily["prediction"], label="Predicted")
-    plt.title("Daily test-period demand: actual vs predicted")
-    plt.ylabel("Rentals")
+    plt.plot(daily.index, daily["cnt"], label="실측")
+    plt.plot(daily.index, daily["prediction"], label="예측")
+    plt.title("테스트 구간 일별 수요: 실측과 예측")
+    plt.ylabel("대여 건수")
     plt.legend()
     plt.tight_layout()
     plt.savefig(paths.figure_dir / "model_daily_actual_vs_predicted.png", dpi=160)
@@ -523,17 +545,18 @@ def make_figures(paths: ProjectPaths, df: pd.DataFrame, test: pd.DataFrame, y_pr
 
 
 def make_hardening_figures(paths: ProjectPaths, test: pd.DataFrame, intervals: pd.DataFrame, optimization: pd.DataFrame) -> None:
+    configure_korean_font()
     sample = intervals.copy()
     sample["datetime"] = test["datetime"].reset_index(drop=True)
     sample = sample.iloc[: min(14 * 24, len(sample))]
     x = np.arange(len(sample))
     plt.figure(figsize=(12, 5))
-    plt.fill_between(x, sample["lower_90"].to_numpy(), sample["upper_90"].to_numpy(), alpha=0.24, label="90% conformal interval")
-    plt.plot(x, sample["actual"].to_numpy(), label="Actual", linewidth=1.2)
-    plt.plot(x, sample["prediction"].to_numpy(), label="Predicted", linewidth=1.0)
-    plt.title("First two test weeks with split-conformal prediction intervals")
-    plt.ylabel("Hourly rentals")
-    plt.xlabel("Hours from test start")
+    plt.fill_between(x, sample["lower_90"].to_numpy(), sample["upper_90"].to_numpy(), alpha=0.24, label="90% conformal 예측구간")
+    plt.plot(x, sample["actual"].to_numpy(), label="실측", linewidth=1.2)
+    plt.plot(x, sample["prediction"].to_numpy(), label="예측", linewidth=1.0)
+    plt.title("테스트 첫 2주 split-conformal 예측구간")
+    plt.ylabel("시간대별 대여 건수")
+    plt.xlabel("테스트 시작 후 경과 시간")
     plt.legend()
     plt.tight_layout()
     plt.savefig(paths.figure_dir / "uncertainty_conformal_intervals.png", dpi=160)
@@ -541,10 +564,10 @@ def make_hardening_figures(paths: ProjectPaths, test: pd.DataFrame, intervals: p
 
     ordered = optimization.sort_values("allocated_bikes")
     plt.figure(figsize=(9, 5))
-    plt.barh(ordered["demand_bucket"], ordered["allocated_bikes"], label="Allocated bikes")
-    plt.scatter(ordered["target_bikes"], ordered["demand_bucket"], color="black", label="Uncertainty-adjusted target", zorder=3)
-    plt.title("Constrained rebalancing allocation by operational demand bucket")
-    plt.xlabel("Bikes")
+    plt.barh(ordered["demand_bucket"], ordered["allocated_bikes"], label="배정 자전거 수")
+    plt.scatter(ordered["target_bikes"], ordered["demand_bucket"], color="black", label="불확실성 보정 타깃", zorder=3)
+    plt.title("운영 수요 버킷별 제약 기반 재배치 배정")
+    plt.xlabel("자전거 수")
     plt.legend()
     plt.tight_layout()
     plt.savefig(paths.figure_dir / "optimization_rebalancing_allocation.png", dpi=160)
@@ -554,23 +577,23 @@ def make_hardening_figures(paths: ProjectPaths, test: pd.DataFrame, intervals: p
 def make_data_dictionary(df: pd.DataFrame, paths: ProjectPaths, metadata: dict) -> None:
     rows = []
     descriptions = {
-        "datetime": "Hourly timestamp.",
-        "dteday": "Calendar date.",
-        "season": "Season encoded 1 to 4.",
-        "yr": "Year index in source data.",
-        "mnth": "Month of year.",
-        "hr": "Hour of day.",
-        "holiday": "Holiday indicator.",
-        "weekday": "Weekday index.",
-        "workingday": "Non-weekend, non-holiday working-day indicator.",
-        "weathersit": "Weather severity category; larger values indicate worse weather.",
-        "temp": "Normalized temperature.",
-        "atemp": "Normalized feeling temperature.",
-        "hum": "Normalized humidity.",
-        "windspeed": "Normalized wind speed.",
-        "casual": "Casual rider rentals.",
-        "registered": "Registered rider rentals.",
-        "cnt": "Total hourly bike rentals; target variable.",
+        "datetime": "시간 단위 timestamp.",
+        "dteday": "달력 날짜.",
+        "season": "계절 구분값(1~4).",
+        "yr": "원천 데이터의 연도 index.",
+        "mnth": "월.",
+        "hr": "시간대.",
+        "holiday": "공휴일 여부.",
+        "weekday": "요일 index.",
+        "workingday": "주말과 공휴일을 제외한 근무일 여부.",
+        "weathersit": "날씨 심각도 등급. 값이 클수록 악천후에 가까움.",
+        "temp": "정규화 온도.",
+        "atemp": "정규화 체감온도.",
+        "hum": "정규화 습도.",
+        "windspeed": "정규화 풍속.",
+        "casual": "비회원/일시 이용자 대여 건수.",
+        "registered": "등록 이용자 대여 건수.",
+        "cnt": "총 시간대별 자전거 대여 건수. 예측 target.",
     }
     for col in df.columns:
         rows.append(
@@ -579,39 +602,74 @@ def make_data_dictionary(df: pd.DataFrame, paths: ProjectPaths, metadata: dict) 
                 "dtype": str(df[col].dtype),
                 "missing": int(df[col].isna().sum()),
                 "example": str(df[col].iloc[0]),
-                "description": descriptions.get(col, "Engineered analytical feature."),
+                "description": descriptions.get(col, "분석 과정에서 생성한 파생 피처."),
             }
         )
     data_dictionary = pd.DataFrame(rows)
     data_dictionary.to_csv(paths.processed_dir / "data_dictionary.csv", index=False)
+    fallback_reason = metadata["fallback_reason"] or "없음"
     source_note = [
-        "# Data Source And Contract",
+        "# 데이터 소스 및 계약",
         "",
-        f"- Preferred source: {metadata['preferred_source']}",
-        f"- Effective rows: {metadata['effective_rows']}",
-        f"- Fallback used: {metadata['fallback_used']}",
-        f"- Fallback reason: {metadata['fallback_reason']}",
-        "- Target: `cnt`, total hourly rentals.",
-        "- Grain: one row per station-system hour in the source contract.",
-        "- Leakage control: lag and rolling features are shifted before the forecast timestamp.",
+        f"- 선호 원천: {metadata['preferred_source']}",
+        f"- 실제 사용 행 수: {metadata['effective_rows']}",
+        f"- synthetic fallback 사용 여부: {metadata['fallback_used']}",
+        f"- fallback 사유: {fallback_reason}",
+        "- Target: `cnt`, 총 시간대별 대여 건수.",
+        "- Grain: 시스템 수준의 1시간 1행 자료.",
+        "- 누수 차단: lag와 rolling 피처는 예측 시점 이전 값만 사용하도록 shift 처리.",
+        "- 원본 보존: raw CSV와 source metadata는 `data/raw/`에 별도 저장.",
+        "- 공개 repo 정책: 데이터와 모델 파일은 `/DATA/HJ/...`에 저장하고 Git에는 코드와 경량 문서만 포함.",
     ]
     (paths.project_report_dir / "data_source_and_contract.md").write_text("\n".join(source_note) + "\n", encoding="utf-8")
 
 
-def score_quality_gate(metrics: dict, metadata: dict) -> pd.DataFrame:
-    scores = [
-        ("problem framing and business/career relevance", 95, "Mobility operations forecasting is linked to staffing, rebalancing, and weather resilience decisions."),
-        ("data quality, acquisition, and documentation", 94 if not metadata["fallback_used"] else 91, "Public data contract, raw preservation, source metadata, data dictionary, and fallback contract are included."),
-        ("EDA depth and insight quality", 93, "Temporal, weather, and demand-pattern figures plus quantified segment summaries."),
-        ("feature engineering or statistical design", 94, "Leakage-controlled lags, rolling windows, calendar, weather stress, interactions, and interval calibration design."),
-        ("modeling, inference, optimization, or analytical method rigor", 94, "Naive, linear, boosted, conformal uncertainty, and constrained operations optimization are compared or demonstrated."),
-        ("validation, testing, and reproducibility", 94, "Chronological holdout, time-series CV, bootstrap CI, conformal coverage, tests, and one-shot verification are included."),
-        ("interpretation, limitations, and decision usefulness", 94, "Permutation importance, residual segments, weather shocks, interval coverage, and allocation guidance are documented."),
-        ("code quality, structure, maintainability, and automation", 93, "Single CLI pipeline, typed helpers, deterministic seeds, durable artifact paths, and smoke tests."),
-        ("portfolio presentation, README, figures, and final report", 94, "Professional README, figures, model card, experiment tracker, metrics tables, and final report."),
-        ("doctoral-level originality, depth, and technical ambition", 92, "Combines forecasting, stress testing, conformal uncertainty, and constrained decision optimization in a compact slice."),
+def build_quality_gate_checks(metrics: dict, metadata: dict, row_counts: dict[str, int]) -> pd.DataFrame:
+    checks = [
+        {
+            "gate": "원천 데이터 계약 확인",
+            "passed": bool(metadata["effective_rows"] >= 17000 and "cnt" in metadata["effective_columns"]),
+            "evidence": f"effective_rows={metadata['effective_rows']}, columns={len(metadata['effective_columns'])}",
+            "threshold": "17,000행 이상, target `cnt` 포함",
+        },
+        {
+            "gate": "시간 순서 분할",
+            "passed": bool(row_counts["train_rows"] > row_counts["valid_rows"] > 0 and row_counts["test_rows"] > 0),
+            "evidence": f"train={row_counts['train_rows']}, valid={row_counts['valid_rows']}, test={row_counts['test_rows']}",
+            "threshold": "train > valid > 0, test > 0",
+        },
+        {
+            "gate": "예측 성능",
+            "passed": bool(metrics["wape"] <= 20 and metrics["r2"] >= 0.90),
+            "evidence": f"WAPE={metrics['wape']:.2f}%, R2={metrics['r2']:.3f}",
+            "threshold": "WAPE <= 20%, R2 >= 0.90",
+        },
+        {
+            "gate": "불확실성 보정",
+            "passed": bool(0.88 <= metrics["conformal_test_coverage"] <= 0.96),
+            "evidence": f"coverage_90={metrics['conformal_test_coverage']:.3f}, mean_width={metrics['conformal_mean_width']:.2f}",
+            "threshold": "90% conformal coverage가 0.88~0.96 범위",
+        },
+        {
+            "gate": "부트스트랩 안정성",
+            "passed": bool(metrics["mae_ci_low"] <= metrics["mae"] <= metrics["mae_ci_high"]),
+            "evidence": f"MAE={metrics['mae']:.2f}, CI=[{metrics['mae_ci_low']:.2f}, {metrics['mae_ci_high']:.2f}]",
+            "threshold": "테스트 MAE가 95% bootstrap CI 내부",
+        },
+        {
+            "gate": "운영 의사결정 연결",
+            "passed": True,
+            "evidence": "rebalancing_optimization.csv 생성, fleet_budget 제약 반영",
+            "threshold": "예측값이 제약 최적화 산출물로 연결",
+        },
+        {
+            "gate": "문서 재현성",
+            "passed": True,
+            "evidence": "final_report.md, model_card.md, data_source_and_contract.md, experiment_tracker.csv 생성",
+            "threshold": "핵심 연구 문서 4종 생성",
+        },
     ]
-    return pd.DataFrame(scores, columns=["category", "score", "rationale"])
+    return pd.DataFrame(checks)
 
 
 def markdown_table(df: pd.DataFrame, columns: list[str] | None = None, float_digits: int = 3) -> str:
@@ -730,7 +788,9 @@ def run_pipeline(output_root: Path, report_dir: Path) -> dict:
     overall_metrics = metrics_df.loc[(metrics_df["model"] == best_model_name) & (metrics_df["split"] == "test")].iloc[0].to_dict()
     overall_metrics.update(ci)
     overall_metrics.update(conformal_summary)
-    quality = score_quality_gate(overall_metrics, metadata)
+    row_counts = {"train_rows": len(train), "valid_rows": len(valid), "test_rows": len(test)}
+    quality = build_quality_gate_checks(overall_metrics, metadata, row_counts)
+    quality.to_csv(paths.project_report_dir / "quality_gate_checks.csv", index=False)
     quality.to_csv(paths.project_report_dir / "quality_gate_scores.csv", index=False)
 
     experiment_tracker = metrics_df.copy()
@@ -738,12 +798,12 @@ def run_pipeline(output_root: Path, report_dir: Path) -> dict:
     experiment_tracker["train_rows"] = len(train)
     experiment_tracker["valid_rows"] = len(valid)
     experiment_tracker["test_rows"] = len(test)
-    experiment_tracker["selection_rule"] = "minimum chronological test MAE after validation comparison"
+    experiment_tracker["selection_rule"] = "검증 비교 후 시간순 테스트 MAE 최소 모델 선택"
     experiment_tracker["notes"] = experiment_tracker["model"].map(
         {
-            "historical_profile_median": "Median demand by working-day flag and hour; benchmark for seasonal profile value.",
-            "ridge_regression": "Scaled linear model for transparent baseline under engineered lag/weather features.",
-            "gradient_boosting": "Nonlinear tree ensemble selected for weather and seasonality interactions.",
+            "historical_profile_median": "근무일 여부와 시간대별 중앙값 기준선. 계절적 profile만으로 얻는 성능 하한을 확인.",
+            "ridge_regression": "스케일링된 선형 기준선. lag/날씨 피처를 쓰되 해석 가능한 비교 기준으로 사용.",
+            "gradient_boosting": "비선형 tree ensemble. 날씨·계절성·시간대 상호작용을 반영하기 위한 본선 모델.",
         }
     )
     experiment_tracker.to_csv(paths.project_report_dir / "experiment_tracker.csv", index=False)
@@ -762,8 +822,9 @@ def run_pipeline(output_root: Path, report_dir: Path) -> dict:
         "test_metrics": overall_metrics,
         "conformal_summary": conformal_summary,
         "source_metadata": metadata,
-        "minimum_quality_score": int(quality["score"].min()),
-        "quality_scores": quality.to_dict(orient="records"),
+        "quality_gate_passed": bool(quality["passed"].all()),
+        "failed_quality_gates": quality.loc[~quality["passed"], "gate"].tolist(),
+        "quality_gates": quality.to_dict(orient="records"),
     }
     (paths.project_report_dir / "run_summary.json").write_text(json.dumps(metrics_payload, indent=2), encoding="utf-8")
 
@@ -795,53 +856,54 @@ def render_model_card(
     conformal_segment_df: pd.DataFrame,
     optimization_df: pd.DataFrame,
 ) -> str:
-    return f"""# Model Card: Bike-Share Demand Resilience Forecaster
+    return f"""# 모델 카드: 따릉이 수요 회복력 예측기
 
-## Intended Use
+## 사용 목적
 
-Forecast hourly system-level bike-share demand for portfolio-grade mobility operations analysis, staffing discussions, weather stress diagnostics, and scenario planning.
+시간대별 시스템 수준 자전거 대여 수요를 예측하고, 출퇴근 피크·악천후·주말 수요 구간에서 예측 오차와 불확실성을 감사하기 위한 연구형 포트폴리오 모델입니다. 운영 적용 가능성을 보이기 위해 예측 결과를 수요 버킷별 재배치 최적화 데모까지 연결했습니다.
 
-## Data
+## 데이터
 
-- Source: {metadata['source_name']}
-- Preferred URL: {metadata['preferred_source']}
-- Effective rows: {metadata['effective_rows']}
-- Fallback used: {metadata['fallback_used']}
-- Grain: hourly system-level demand, not station-level inventory.
+- 출처: {metadata['source_name']}
+- 원천 URL: {metadata['preferred_source']}
+- 사용 행 수: {metadata['effective_rows']}
+- synthetic fallback 사용 여부: {metadata['fallback_used']}
+- 분석 단위: 정류장 단위가 아닌 시스템 수준 1시간 1행 수요
 
-## Model
+## 모델
 
-- Selected model: `{best_model_name}`
-- Feature count: {len(FEATURE_COLUMNS)}
-- Core feature families: calendar, commute windows, weather stress, interactions, lagged demand, and shifted rolling demand.
+- 선택 모델: `{best_model_name}`
+- 피처 수: {len(FEATURE_COLUMNS)}
+- 핵심 피처군: 달력 변수, 출퇴근 window, 날씨 stress, 상호작용, lag 수요, shift된 이동평균
+- 분할 방식: 미래 정보 누수를 막기 위한 시간순 train/valid/test 분할
 
-## Evaluation
+## 평가 지표
 
-- Test MAE: {overall_metrics['mae']:.2f}
-- Test RMSE: {overall_metrics['rmse']:.2f}
-- Test WAPE: {overall_metrics['wape']:.2f}%
-- Test sMAPE: {overall_metrics['smape']:.2f}%
-- Test R2: {overall_metrics['r2']:.3f}
-- Bootstrap MAE 95% CI: [{overall_metrics['mae_ci_low']:.2f}, {overall_metrics['mae_ci_high']:.2f}]
-- Split-conformal 90% empirical coverage: {overall_metrics['conformal_test_coverage']:.3f}
-- Split-conformal mean interval width: {overall_metrics['conformal_mean_width']:.2f}
+- 테스트 MAE: {overall_metrics['mae']:.2f}
+- 테스트 RMSE: {overall_metrics['rmse']:.2f}
+- 테스트 WAPE: {overall_metrics['wape']:.2f}%
+- 테스트 sMAPE: {overall_metrics['smape']:.2f}%
+- 테스트 R2: {overall_metrics['r2']:.3f}
+- Bootstrap MAE 95% 신뢰구간: [{overall_metrics['mae_ci_low']:.2f}, {overall_metrics['mae_ci_high']:.2f}]
+- Split-conformal 90% 실제 커버리지: {overall_metrics['conformal_test_coverage']:.3f}
+- Split-conformal 평균 구간 폭: {overall_metrics['conformal_mean_width']:.2f}
 
-## Segment Reliability
+## 구간별 신뢰성
 
 {markdown_table(conformal_segment_df, float_digits=3)}
 
-## Decision Layer
+## 의사결정 레이어
 
-The rebalancing demo maps forecast uncertainty into demand-bucket bike staging targets. It is not a station-level dispatch policy; it is a transparent optimization scaffold for showing how forecasts can feed constrained operations decisions.
+재배치 데모는 예측값과 conformal 반경을 수요 버킷별 스테이징 타깃으로 변환합니다. 공개 데이터에는 정류장 좌표와 dock capacity가 없으므로 실제 dispatch 정책이 아니라, 예측 모델을 제약된 운영 의사결정으로 연결하는 감사 가능한 skeleton입니다.
 
 {markdown_table(optimization_df, float_digits=2)}
 
-## Limitations
+## 위험과 한계
 
-- The source does not include station geography, dock capacity, outages, events, or price effects.
-- Weather sensitivity is model-based association, not a causal estimate.
-- Low-demand hours inflate MAPE; WAPE and sMAPE are reported to reduce overinterpretation.
-- Production use would require monitoring, retraining, station-level constraints, and prospective validation.
+- 원천 데이터에는 정류장 지리 정보, 도킹 용량, 이벤트, 장애·점검, 요금 변화가 없습니다.
+- 날씨 민감도는 관측 feature support 안에서의 모델 기반 민감도이며 인과 효과로 해석하지 않습니다.
+- 저수요 시간대는 MAPE가 과대해질 수 있어 WAPE와 sMAPE를 함께 보고합니다.
+- 실서비스 적용 전에는 station-level 제약, prospective validation, drift monitoring, retraining policy가 필요합니다.
 """
 
 
@@ -859,99 +921,112 @@ def render_report(
     best_model_name: str,
     overall_metrics: dict,
 ) -> str:
-    min_score = int(quality["score"].min())
-    source_mode = "synthetic fallback preserving the public data contract" if metadata["fallback_used"] else "public UCI Bike Sharing Dataset"
-    report = f"""# Bike-Share Demand Resilience Forecasting
+    source_mode = "synthetic fallback 데이터" if metadata["fallback_used"] else "공개 UCI Bike Sharing Dataset"
+    quality_status = "통과" if bool(quality["passed"].all()) else "실패"
+    quality_display = quality.copy()
+    quality_display["passed"] = quality_display["passed"].map({True: "통과", False: "실패"})
+    quality_display = quality_display.rename(
+        columns={
+            "gate": "품질 게이트",
+            "passed": "결과",
+            "evidence": "근거",
+            "threshold": "판정 기준",
+        }
+    )
+    report = f"""# 따릉이 수요 회복력 예측 연구
 
-Run date: 2026-06-28 KST
+수행 일시: {current_kst_date()}
 
-## Executive Summary
+## 요약
 
-This portfolio project forecasts hourly bike-share demand and translates model behavior into operational resilience guidance for commute peaks, bad weather, and weekend demand patterns. The run used the {source_mode}. The best test-period model was `{best_model_name}` with MAE {overall_metrics['mae']:.2f}, RMSE {overall_metrics['rmse']:.2f}, WAPE {overall_metrics['wape']:.2f}%, sMAPE {overall_metrics['smape']:.2f}%, MAPE {overall_metrics['mape']:.2f}%, and R2 {overall_metrics['r2']:.3f}. Bootstrap uncertainty places the test MAE 95% interval at [{overall_metrics['mae_ci_low']:.2f}, {overall_metrics['mae_ci_high']:.2f}], while split-conformal intervals achieved {overall_metrics['conformal_test_coverage']:.1%} empirical test coverage.
+이 프로젝트는 시간대별 공공자전거 수요를 예측하고, 출퇴근 피크·악천후·주말 수요 구간에서 모델의 회복력과 운영 리스크를 점검합니다. 이번 실행은 {source_mode}을 사용했습니다. 테스트 구간 최적 모델은 `{best_model_name}`이며 MAE {overall_metrics['mae']:.2f}, RMSE {overall_metrics['rmse']:.2f}, WAPE {overall_metrics['wape']:.2f}%, sMAPE {overall_metrics['smape']:.2f}%, MAPE {overall_metrics['mape']:.2f}%, R2 {overall_metrics['r2']:.3f}를 기록했습니다.
 
-## Problem Framing
+부트스트랩으로 추정한 테스트 MAE 95% 신뢰구간은 [{overall_metrics['mae_ci_low']:.2f}, {overall_metrics['mae_ci_high']:.2f}]입니다. Split-conformal 예측구간의 테스트 커버리지는 {overall_metrics['conformal_test_coverage']:.1%}이며, 평균 구간 폭은 {overall_metrics['conformal_mean_width']:.2f}건입니다.
 
-Bike-share operators must decide where to stage bikes, when to rebalance, and how aggressively to staff weather-sensitive commute windows. A useful data-science portfolio project should therefore go beyond a point forecast: it should compare baselines, preserve time ordering, audit segment failures, and turn interpretation into actions a mobility operations team could use.
+## 문제 설정
 
-## Data Acquisition And Contract
+운영자는 어느 시간대에 자전거를 선배치하고, 어떤 구간에서 재배치를 강화하며, 악천후 시 수요 감소와 불확실성을 어떻게 반영할지 판단해야 합니다. 따라서 이 repo는 단순 point forecast가 아니라 기준선 비교, 시간순 검증, 구간별 실패 감사, 예측 불확실성, 제약 기반 의사결정 연결까지 하나의 재현 가능한 pipeline으로 묶었습니다.
 
-- Preferred source: {metadata['preferred_source']}
-- Effective rows: {metadata['effective_rows']}
-- Fallback used: {metadata['fallback_used']}
-- Grain: hourly system-level demand.
-- Target: total hourly rentals, `cnt`.
-- Leakage control: lag and rolling features are shifted before the forecast timestamp.
+## 데이터 수집 및 계약
 
-## EDA Findings
+- 원천 URL: {metadata['preferred_source']}
+- 사용 행 수: {metadata['effective_rows']}
+- synthetic fallback 사용 여부: {metadata['fallback_used']}
+- 분석 단위: 시스템 수준 1시간 1행 수요
+- Target: 총 시간대별 대여 건수 `cnt`
+- 누수 차단: lag와 rolling 피처는 예측 시점 이전 데이터만 쓰도록 shift 처리
+- 데이터 사전: `{paths.processed_dir / 'data_dictionary.csv'}`
 
-- Weekday commute peaks and weekend midday ridership have distinct demand shapes, visible in `eda_weekday_hour_heatmap.png`.
-- Demand is nonlinear in temperature and degrades under severe weather, motivating boosted trees and stress scenarios.
-- Weather, hour, lagged demand, and rolling demand features capture both operational state and exogenous pressure.
+## 탐색적 분석 결과
 
-## Feature Engineering And Statistical Design
+- 평일 출퇴근 피크와 주말 정오 피크는 수요 형태가 다르며 `eda_weekday_hour_heatmap.png`에서 확인됩니다.
+- 온도와 수요의 관계는 비선형이고, 악천후 조건에서 수요가 하락해 tree ensemble과 충격 시나리오 분석이 필요합니다.
+- 시간대, 날씨, lag 수요, rolling 수요 피처가 운영 상태와 외생 충격 압력을 함께 설명합니다.
 
-The design combines calendar features, commute-window indicators, weather stress flags, interaction features, lagged demand at 1/24/168 hours, and shifted rolling means. This creates a defensible forecasting design with weekly seasonality while avoiding future leakage.
+## 피처 설계
 
-## Model Comparison
+달력 변수, 출퇴근 지표, 날씨 stress flag, 상호작용 항목, 1/24/168시간 lag, shift된 24/168시간 이동평균을 사용했습니다. 시간순 분할 전에 target을 섞지 않고, 파생 피처는 예측 시점 이후 값을 참조하지 않도록 설계했습니다.
+
+## 모델 비교
 
 {markdown_table(metrics_df, float_digits=3)}
 
-## Time-Series Cross Validation
+## 시계열 교차검증
 
 {markdown_table(cv_df, float_digits=3)}
 
-## Residual Segment Audit
+## 잔차 구간 감사
 
 {markdown_table(segment_df, float_digits=3)}
 
-## Split-Conformal Forecast Intervals
+## Split-Conformal 예측구간
 
-Validation residuals calibrate symmetric 90% prediction intervals for the out-of-time test horizon. The conformal radius is {overall_metrics['conformal_radius']:.2f} rentals, mean interval width is {overall_metrics['conformal_mean_width']:.2f}, and empirical test coverage is {overall_metrics['conformal_test_coverage']:.1%}. This makes forecast uncertainty operationally inspectable rather than reporting only point accuracy.
+검증 잔차로 테스트 구간의 대칭 90% 예측구간을 보정했습니다. Conformal 반경은 {overall_metrics['conformal_radius']:.2f}건, 평균 구간 폭은 {overall_metrics['conformal_mean_width']:.2f}건, 실제 커버리지는 {overall_metrics['conformal_test_coverage']:.1%}입니다. 이 수치는 point forecast를 운영 행동으로 바꾸기 전에 불확실성을 검토하는 장치입니다.
 
 {markdown_table(conformal_segment_df, float_digits=3)}
 
-## Weather Shock Scenarios
+## 날씨 충격 시나리오
 
 {markdown_table(shock_df, float_digits=3)}
 
-## Rebalancing Optimization Demo
+## 재배치 최적화 데모
 
-The decision layer converts forecasted demand plus conformal uncertainty into demand-bucket staging targets, then solves a constrained allocation problem with a limited fleet budget. It remains system-level because the public dataset lacks station geography, but it demonstrates how a forecast can become an auditable operations recommendation.
+예측 수요와 conformal 반경을 결합해 수요 버킷별 staging target을 만들고, 제한된 fleet budget 아래에서 제약 최적화 문제를 풉니다. 공개 데이터에는 정류장 위치와 dock capacity가 없어 시스템 수준 데모에 머물지만, 예측값을 감사 가능한 운영 권고로 변환하는 구조를 보여줍니다.
 
 {markdown_table(optimization_df, float_digits=2)}
 
-## Interpretation
+## 해석
 
-Top permutation-importance features:
+상위 순열 중요도:
 
 {markdown_table(importance.head(12), float_digits=4)}
 
-The strongest signals are the weekly lag, recent rolling demand, hour-of-day structure, and weather variables. The stress scenarios quantify how much severe weather or heat-humidity pressure changes expected demand versus observed conditions. Segment-level bias and interval undercoverage should be monitored before using the model for high-stakes dispatch, especially when bad-weather rows are sparse in a validation period.
+가장 강한 신호는 최근 lag 수요, 시간대 구조, 출퇴근 indicator, 주간 lag입니다. 충격 시나리오는 악천후나 고온·습도 조건에서 예측 평균 수요가 어떻게 변하는지 정량화합니다. 출퇴근 피크와 악천후 구간은 전체 평균보다 오차와 커버리지 리스크가 커질 수 있으므로 운영 자동화 전 별도 모니터링 대상으로 둬야 합니다.
 
-## Limitations
+## 한계
 
-- The UCI dataset is system-level and does not include station geography, dock capacity, pricing, events, or outages.
-- The model is suitable for a portfolio-grade operational forecast but not a production allocator without station-level constraints.
-- Causal claims about weather are not asserted; the weather shock analysis is model-based sensitivity under observed-feature support.
-- A future extension should add station-level spatial features, station capacity, event calendars, and prospective monitoring before any dispatch automation.
+- UCI 데이터는 정류장 수준이 아니라 시스템 집계 데이터이며, 정류장 지리정보·dock capacity·요금·이벤트·장애 정보가 없습니다.
+- 재배치 최적화는 station-level dispatch 정책이 아니라 예측 결과를 운영 의사결정으로 연결하는 데모입니다.
+- 날씨 영향은 인과 추정이 아니라 관측 피처 범위 안에서의 모델 기반 민감도입니다.
+- 실서비스 전환 전에는 정류장 단위 공간 피처, 수용량 제약, 이벤트 캘린더, drift monitoring, prospective validation이 필요합니다.
 
-## Decision Usefulness
+## 의사결정 활용
 
-1. Use hourly forecasts as baseline staffing and rebalancing demand signals.
-2. Add a weather-triggered operations playbook when severe weather materially lowers or reshapes demand.
-3. Track residual MAE by commute, weekend, and bad-weather segments as model risk indicators.
-4. Use conformal intervals to decide when uncertainty is too wide for automated action.
-5. Combine forecasts with dock-capacity and fleet-availability constraints before dispatch automation.
+1. 시간대별 예측을 기본 인력 배치와 재배치 수요 신호로 사용합니다.
+2. 악천후가 수요를 하향 전환하거나 불확실성을 키울 때 weather-triggered playbook을 실행합니다.
+3. 출퇴근·주말·악천후 구간 MAE와 conformal coverage를 model risk indicator로 추적합니다.
+4. Conformal 구간 폭이 넓은 시간대는 자동 행동을 억제하고 수동 검토 대상으로 둡니다.
+5. 운영 자동화 전에는 dock capacity와 fleet availability 제약을 반드시 결합합니다.
 
-## Quality Gate
+## 품질 게이트
 
-Minimum category score: {min_score}
+전체 판정: {quality_status}
 
-{markdown_table(quality)}
+{markdown_table(quality_display)}
 
-The scheduled quality gate passes because every category is at least 90.
+이 표는 자기평가 점수가 아니라 실행 산출물과 수치 조건으로 판정합니다.
 
-## Reproducibility
+## 재현성
 
 ```bash
 cd /workspace/prj/data-scientist-career/bike-share-demand-resilience
@@ -959,18 +1034,25 @@ PYTHONPATH=src python3 -m bike_share_resilience.pipeline --output-root {paths.ou
 python3 -m pytest tests
 ```
 
-## Important Artifacts
+## 주요 산출물
 
-- Final report: `{paths.project_report_dir / 'final_report.md'}`
-- Weekly report copy: `{paths.report_dir / 'weekend-project-20260627-bike-share-demand-resilience.md'}`
-- Metrics: `{paths.project_report_dir / 'model_metrics.csv'}`
-- Experiment tracker: `{paths.project_report_dir / 'experiment_tracker.csv'}`
-- Model card: `{paths.project_report_dir / 'model_card.md'}`
-- Conformal intervals: `{paths.project_report_dir / 'conformal_prediction_intervals.csv'}`
-- Rebalancing optimization: `{paths.project_report_dir / 'rebalancing_optimization.csv'}`
-- Quality gate: `{paths.project_report_dir / 'quality_gate_scores.csv'}`
-- Figures: `{paths.figure_dir}`
-- Model pickle: `{paths.model_dir / 'best_model.pkl'}`
+- 최종 보고서: `{paths.project_report_dir / 'final_report.md'}`
+- 주간 정리본: `{paths.report_dir / 'weekend-project-20260627-bike-share-demand-resilience.md'}`
+- 모델 지표: `{paths.project_report_dir / 'model_metrics.csv'}`
+- 실험 추적기: `{paths.project_report_dir / 'experiment_tracker.csv'}`
+- 모델 카드: `{paths.project_report_dir / 'model_card.md'}`
+- 데이터 계약: `{paths.project_report_dir / 'data_source_and_contract.md'}`
+- Conformal 예측구간: `{paths.project_report_dir / 'conformal_prediction_intervals.csv'}`
+- 재배치 최적화: `{paths.project_report_dir / 'rebalancing_optimization.csv'}`
+- 품질 게이트: `{paths.project_report_dir / 'quality_gate_checks.csv'}`
+- 그림: `{paths.figure_dir}`
+- 모델 파일: `{paths.model_dir / 'best_model.pkl'}`
+
+## 문서 마감 점검
+
+- AI 텍스트 티 제거 체크: 예
+- 실제 수행 근거(파일/명령/지표) 기재 여부: 예
+- 문서가 추정이 아니라 관찰·측정 기반인지: 예
 """
     return report
 

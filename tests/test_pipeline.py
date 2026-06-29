@@ -1,12 +1,19 @@
 from pathlib import Path
-import tempfile
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 
 from bike_share_resilience.pipeline import (
+    build_quality_gate_checks,
     build_features,
     conformal_intervals,
     create_synthetic_contract,
     chronological_split,
     evaluate_predictions,
+    render_model_card,
     rebalancing_optimization,
 )
 
@@ -51,8 +58,62 @@ def test_rebalancing_optimization_returns_bucket_allocations():
     assert result["allocated_bikes"].sum() > 0
 
 
+def test_quality_gate_checks_use_observable_thresholds():
+    metadata = {
+        "effective_rows": 17379,
+        "effective_columns": ["cnt", "datetime"],
+    }
+    metrics = {
+        "wape": 15.0,
+        "r2": 0.93,
+        "conformal_test_coverage": 0.92,
+        "conformal_mean_width": 175.0,
+        "mae": 36.0,
+        "mae_ci_low": 34.0,
+        "mae_ci_high": 38.0,
+    }
+    rows = {"train_rows": 12000, "valid_rows": 2500, "test_rows": 2500}
+    checks = build_quality_gate_checks(metrics, metadata, rows)
+    assert checks["passed"].all()
+    assert {"gate", "passed", "evidence", "threshold"}.issubset(checks.columns)
+
+
+def test_model_card_is_korean_template():
+    metadata = {
+        "source_name": "UCI Machine Learning Repository Bike Sharing Dataset",
+        "preferred_source": "https://example.com/data.zip",
+        "effective_rows": 17379,
+        "fallback_used": False,
+    }
+    metrics = {
+        "mae": 35.95,
+        "rmse": 55.13,
+        "wape": 15.36,
+        "smape": 27.85,
+        "r2": 0.933,
+        "mae_ci_low": 34.31,
+        "mae_ci_high": 37.61,
+        "conformal_test_coverage": 0.923,
+        "conformal_mean_width": 175.19,
+    }
+    coverage = create_synthetic_contract(days=8).head(1)[["cnt"]].rename(columns={"cnt": "rows"})
+    coverage["segment"] = "전체"
+    coverage["coverage_90"] = 0.92
+    coverage["mean_interval_width"] = 175.0
+    rebalancing = coverage.rename(columns={"segment": "demand_bucket"})
+    rebalancing["allocated_bikes"] = 10.0
+    card = render_model_card(metadata, "gradient_boosting", metrics, coverage, rebalancing)
+    assert "# 모델 카드" in card
+    assert "## 사용 목적" in card
+    assert "Intended Use" not in card
+
+
 if __name__ == "__main__":
     test_feature_builder_preserves_rows_after_lags()
     test_chronological_split_ordering()
     test_evaluate_predictions_contains_core_metrics()
+    test_conformal_intervals_cover_expected_columns()
+    test_rebalancing_optimization_returns_bucket_allocations()
+    test_quality_gate_checks_use_observable_thresholds()
+    test_model_card_is_korean_template()
     print("tests passed")
