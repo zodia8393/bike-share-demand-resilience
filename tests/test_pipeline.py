@@ -8,6 +8,7 @@ if str(SRC) not in sys.path:
 
 from bike_share_resilience.pipeline import (
     build_quality_gate_checks,
+    build_quality_gate_scores,
     build_features,
     conformal_intervals,
     create_synthetic_contract,
@@ -74,8 +75,11 @@ def test_quality_gate_checks_use_observable_thresholds():
     }
     rows = {"train_rows": 12000, "valid_rows": 2500, "test_rows": 2500}
     checks = build_quality_gate_checks(metrics, metadata, rows)
+    scores = build_quality_gate_scores(metrics, metadata, rows)
     assert checks["passed"].all()
     assert {"gate", "passed", "evidence", "threshold"}.issubset(checks.columns)
+    assert scores["score"].min() >= 90
+    assert {"category", "score", "evidence"}.issubset(scores.columns)
 
 
 def test_model_card_is_korean_template():
