@@ -619,7 +619,7 @@ def make_data_dictionary(df: pd.DataFrame, paths: ProjectPaths, metadata: dict) 
         "- Grain: 시스템 수준의 1시간 1행 자료.",
         "- 누수 차단: lag와 rolling 피처는 예측 시점 이전 값만 사용하도록 shift 처리.",
         "- 원본 보존: raw CSV와 source metadata는 `data/raw/`에 별도 저장.",
-        "- 공개 repo 정책: 데이터와 모델 파일은 `/DATA/HJ/...`에 저장하고 Git에는 코드와 경량 문서만 포함.",
+        "- 저장 위치: 데이터와 모델 파일은 `/DATA/HJ/...`에 저장하고 Git에는 코드와 경량 문서만 포함.",
     ]
     (paths.project_report_dir / "data_source_and_contract.md").write_text("\n".join(source_note) + "\n", encoding="utf-8")
 
@@ -1025,7 +1025,6 @@ python3 -m pytest tests
 - 데이터 계약: `{paths.project_report_dir / 'data_source_and_contract.md'}`
 - Conformal 예측구간: `{paths.project_report_dir / 'conformal_prediction_intervals.csv'}`
 - 재배치 최적화: `{paths.project_report_dir / 'rebalancing_optimization.csv'}`
-- 자동 검증 결과: `{paths.project_report_dir / 'quality_gate_checks.csv'}`
 - 그림: `{paths.figure_dir}`
 - 모델 파일: `{paths.model_dir / 'best_model.pkl'}`
 """

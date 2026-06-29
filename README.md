@@ -54,7 +54,6 @@
 ```text
 .
 ├── README.md
-├── KR_DOCS_POLICY.md
 ├── docs/
 │   ├── data_contract.md
 │   ├── modeling_protocol.md

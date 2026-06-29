@@ -40,13 +40,12 @@ Git에는 재현 코드와 경량 문서만 포함합니다. 데이터와 모델
 - `rolling_24_mean`, `rolling_168_mean`은 `shift(1)` 이후 rolling을 계산합니다.
 - `is_commute_peak`, `is_weekend`, `is_night`, `bad_weather`, `temp_x_hum`은 현재 시점에 관측 가능한 calendar/weather 정보에서 생성합니다.
 
-## 품질 확인
+## 생성 파일
 
 pipeline은 실행 시 다음 파일을 생성해 원천 계약을 확인합니다.
 
 - `source_metadata.json`: 원천 URL, fallback 사용 여부, 원본/실사용 컬럼 기록
 - `data_dictionary.csv`: 컬럼명, dtype, 결측 수, 예시값, 설명 기록
-- `quality_gate_checks.csv`: 데이터 행 수와 target 존재 조건 pass/fail 기록
 
 ## fallback 정책
 

@@ -52,13 +52,11 @@ python3 -m py_compile src/bike_share_resilience/pipeline.py tests/test_pipeline.
 | `reports/conformal_prediction_intervals.csv` | test 예측구간 |
 | `reports/conformal_segment_coverage.csv` | 구간별 coverage |
 | `reports/rebalancing_optimization.csv` | 운영 최적화 데모 |
-| `reports/quality_gate_checks.csv` | 자동 검증 결과 |
 
 ## 재현 확인 기준
 
 다음 조건을 만족하면 기본 재현은 성공으로 봅니다.
 
 - `pytest`가 통과합니다.
-- `run_summary.json`의 `quality_gate_passed`가 `true`입니다.
 - `model_metrics.csv`에 세 모델의 valid/test 결과가 모두 존재합니다.
 - `final_report.md`, `model_card.md`, `data_source_and_contract.md`가 한글로 생성됩니다.
