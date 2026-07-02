@@ -2,6 +2,8 @@
 
 현재 slice는 portfolio-ready이며 기존 quality gate를 통과했다. 2026-06-29에 station-level multi-source extension, live inventory snapshot, local API/dashboard check, 2주 snapshot readiness automation, prospective validation evaluator, public deploy readiness gate를 추가해 가장 큰 gap이던 station/capacity/weather/inventory/product surface를 1차 해소했다. 다만 true shortage outcome은 시간별 station_status snapshot이 2주 이상 누적된 이후 prospective validation metric으로 검증한다.
 
+2026-07-02 14:15 KST 기준 snapshot은 75/336개까지 누적됐고, 최소 gate 기준으로는 75/268개다. Public deploy는 계속 `NO_GO`이며, earliest ready 시점은 `2026-07-13T14:04:57+09:00`이다.
+
 | Gate | 현재 상태 | 미달 근거 | 다음 작업 |
 |---|---|---|---|
 | topic candidates >= 5 | PASS | `docs/topic_selection.md`에 5개 후보 평가 기록 | 다음 후보는 SNS/물류/에너지 중 하나로 확장 |

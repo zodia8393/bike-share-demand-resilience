@@ -12,7 +12,8 @@
 - 리스크 분석: 출퇴근 피크와 악천후에서 평균보다 더 흔들리는 구간을 확인.
 - 운영 연결: 예측값에 불확실성을 붙여 재배치 우선순위로 변환.
 - 데이터 확장: 35개 station의 trip, GBFS, weather, live inventory를 결합.
-- 배포 판단: live snapshot이 아직 4/336개라 외부 공개는 `NO_GO`.
+- 한국 확장: 서울 따릉이 실시간 대여정보를 adapter로 연결해 지도 기반 대여 불가/반납 포화 우선순위를 생성.
+- 배포 판단: live snapshot이 75/336개까지 쌓였지만 2주 검증 기준에는 아직 부족해 외부 공개는 `NO_GO`.
 
 ## 무엇을 만들었나
 
@@ -23,6 +24,8 @@
 | 예측 불확실성 | 단일 예측값에 예측구간을 붙여 운영 buffer로 사용 |
 | 재배치 우선순위 | 예측 수요와 fleet budget 제약을 이용해 재배치 후보를 산출 |
 | Station-level 확장 | trip history, GBFS station metadata/status, Open-Meteo weather를 station-hour 단위로 결합 |
+| 서울 따릉이 adapter | 서울 열린데이터광장 실시간 대여정보를 normalized inventory, 지도 point, 재배치 priority로 변환 |
+| Next-snapshot 검증 | snapshot history를 연결해 다음 snapshot의 대여 불가/반납 포화 label과 preliminary rule metric을 산출 |
 | 배포 보류 기준 | live inventory snapshot이 충분히 쌓이기 전까지 외부 공개를 막는 readiness check |
 
 ## 핵심 수치
@@ -37,7 +40,9 @@
 | Station-level 데이터 | 35개 station, 25,200 station-hour rows | 집계 예측을 station 단위 운영 판단으로 확장 |
 | GBFS join rate | 97.1% | station metadata/status 결합 품질이 충분 |
 | Station-level best MAE | 1.006 | 점수 개선보다 부족 위험 순위 해석이 핵심 |
-| Snapshot readiness | 4 / 336 hourly snapshots | 2주 검증 데이터가 아직 부족 |
+| Snapshot readiness | 75 / 336 hourly snapshots | 2주 검증 목표의 22.3%, 최소 gate 75/268 = 28.0% |
+| 서울 따릉이 실시간 대여소 | 2,733 rows, 2,733 map points | 지도 기반 priority product surface 구현 |
+| 서울 따릉이 검증 상태 | `NOT_READY` | 3개 snapshot으로 preliminary rule metric은 가능하지만 validation/model claim은 보류 |
 | Public deploy decision | `NO_GO` | 검증 전 외부 공개를 보류 |
 | CI | GitHub Actions PASS, 20 tests | 재현 실행과 테스트가 자동 검증됨 |
 
@@ -71,8 +76,10 @@
 
 - CI: PASS, 20 tests.
 - Station snapshot monitor: 매시 실행.
-- Snapshot readiness: 4/336 snapshots, earliest ready at `2026-07-13T14:04:57+09:00`.
+- Snapshot readiness: 75/336 snapshots, latest `2026-07-02T14:15:03+09:00`, earliest ready at `2026-07-13T14:04:57+09:00`.
 - Prospective validation: evaluator implemented, current status `NOT_READY` until 2-week snapshot coverage is met.
+- Seoul Ddareungi adapter: schema check와 snapshot capture 통과, local dashboard에 live map/priority/validation readiness 표시.
+- Seoul Ddareungi validation: 3개 snapshot 기준 next-snapshot label과 preliminary rule precision은 생성되지만 기본 24 snapshot gate 전까지 `NOT_READY`.
 - Public deployment: `NO_GO`. 현재는 local dashboard/API만 사용.
 
 ## Repo 구조
@@ -132,8 +139,11 @@ SYNTHETIC_FLAG=--synthetic TOP_STATIONS=10 OUTPUT_ROOT=/tmp/bike-share-station-s
 | Station-level 결과 | `scripts/run_station_level.sh` | `station_level/reports/` |
 | Inventory snapshot과 readiness | `scripts/run_station_snapshot_monitor.sh` | `station_level/data/processed/`, `station_level/reports/` |
 | Dashboard/API 상태 | `scripts/run_station_dashboard.sh` 또는 `station_service --check` | local API/dashboard |
+| 서울 따릉이 schema | `python3 scripts/check_seoul_ddareungi_schema.py --full-scan` | `seoul_ddareungi/reports/seoul_ddareungi_schema_check.json` |
+| 서울 따릉이 snapshot/priority | `python3 scripts/capture_seoul_ddareungi_snapshot.py` | `seoul_ddareungi/data/`, `seoul_ddareungi/reports/` |
+| 서울 따릉이 validation | `PYTHONPATH=src python3 scripts/run_seoul_ddareungi_validation.py` | `seoul_ddareungi/data/processed/`, `seoul_ddareungi/reports/` |
 
-커밋된 문서로 먼저 검토하려면 [docs/modeling_protocol.md](docs/modeling_protocol.md), [docs/station_level_extension.md](docs/station_level_extension.md), [docs/prospective_shortage_validation.md](docs/prospective_shortage_validation.md), [docs/public_deployment_decision.md](docs/public_deployment_decision.md)를 보면 됩니다.
+커밋된 문서로 먼저 검토하려면 [docs/modeling_protocol.md](docs/modeling_protocol.md), [docs/system_design.md](docs/system_design.md), [docs/data_flow_diagram.md](docs/data_flow_diagram.md), [docs/station_level_extension.md](docs/station_level_extension.md), [docs/prospective_shortage_validation.md](docs/prospective_shortage_validation.md), [docs/public_deployment_decision.md](docs/public_deployment_decision.md)를 보면 됩니다.
 
 ## 한계
 

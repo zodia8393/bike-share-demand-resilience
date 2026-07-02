@@ -6,6 +6,18 @@ Status: `NO_GO`
 
 현재 local dashboard/API는 portfolio review와 내부 검증용으로 충분하지만, public deployment는 아직 보류한다. 이유는 true shortage label을 만들기 위한 2주 `station_status` snapshot coverage가 아직 충족되지 않았기 때문이다.
 
+2026-07-02 14:15 KST 기준 최신 readiness는 다음과 같다.
+
+| 항목 | 값 | 판단 |
+|---|---:|---|
+| Snapshot count | 75 / 336 | 2주 목표의 22.3% |
+| Minimum gate | 75 / 268 | 최소 기준의 28.0% |
+| Latest snapshot | `2026-07-02T14:15:03+09:00` | hourly monitor 정상 누적 중 |
+| Earliest ready | `2026-07-13T14:04:57+09:00` | 그 전까지 public deploy 보류 |
+| Public deploy decision | `NO_GO` | prospective validation `NOT_READY` |
+
+서울 따릉이 adapter도 동일하게 public deployment는 `NO_GO`다. 2026-07-02 KST 현재 실시간 대여정보 schema와 snapshot capture는 통과했고 지도/API/dashboard surface는 동작하지만, 서울 snapshot은 3개뿐이라 rule metric은 preliminary evidence로만 저장한다. 기본 gate는 24개 snapshot 이상이며, 그 전까지 `/api/seoul-ddareungi-validation`과 `/api/seoul-ddareungi-model-metrics`는 `NOT_READY`를 유지한다.
+
 ## 배포 전 필수 Gate
 
 다음 명령이 모두 통과해야 public deployment를 다시 검토한다.
@@ -19,6 +31,7 @@ PYTHONPATH=src python3 -m bike_share_resilience.station_prospective_validation \
   --output-root /DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience
 python3 scripts/check_public_deploy_readiness.py \
   --output-root /DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience
+PYTHONPATH=src python3 scripts/run_seoul_ddareungi_validation.py
 ```
 
 `check_public_deploy_readiness.py`는 다음 조건을 확인한다.

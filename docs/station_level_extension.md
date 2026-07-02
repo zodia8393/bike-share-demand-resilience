@@ -95,10 +95,26 @@ scripts/run_station_snapshot_monitor.sh
 - `/health`
 - `/api/summary`
 - `/api/rebalancing-priority`
+- `/api/seoul-ddareungi-priority`
+- `/api/seoul-ddareungi-map-points`
+- `/api/seoul-ddareungi-inventory`
+- `/api/seoul-ddareungi-summary`
+- `/api/seoul-ddareungi-validation`
+- `/api/seoul-ddareungi-model-metrics`
 - `/api/inventory-snapshot`
 - `/api/snapshot-readiness`
 - `/api/deploy-readiness`
 - `/` dashboard HTML
+
+서울 따릉이 adapter는 실시간 대여정보 snapshot을 `station inventory contract`로 정규화하고, 대여 불가 위험은 `send_bikes`, 반납 포화 위험은 `remove_bikes`, 그 외는 `monitor`로 지도와 table에 표시한다. 지도는 `/api/seoul-ddareungi-map-points`를 사용하며 Leaflet + OpenStreetMap 기반이라 별도 지도 API key가 필요 없다.
+
+prospective 검증은 다음 명령으로 갱신한다.
+
+```bash
+PYTHONPATH=src python3 scripts/run_seoul_ddareungi_validation.py
+```
+
+현재 서울 snapshot은 아직 충분한 시간축 coverage가 아니므로 rule metric은 preliminary로 저장하고, validation/model status는 `NOT_READY`로 유지한다.
 
 ## 한계
 

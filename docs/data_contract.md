@@ -26,6 +26,8 @@ station-level extension은 별도 pipeline에서 다음 공개 원천을 실제 
 
 raw ride_id와 raw JSON/zip은 `/DATA`에만 저장하고 Git에는 포함하지 않습니다.
 
+서울 따릉이 adapter의 API key와 원천별 인증 필요 여부는 [seoul_ddareungi_api_keys.md](seoul_ddareungi_api_keys.md)에 별도로 정리합니다. 현재 확정된 필수 key는 실시간 대여정보 호출용 `SEOUL_OPEN_DATA_API_KEY`이며, `DATA_GO_KR_SERVICE_KEY`는 data.go.kr fallback 또는 추가 공공 API를 붙일 때만 선택적으로 사용합니다.
+
 `station_status.json`은 현재 시점 live feed이므로 2024년 1월 trip history의 historical label로 사용하지 않습니다. 시간별 snapshot이 누적된 이후에는 prospective shortage outcome 검증 데이터로 분리합니다.
 
 향후 station-level 확장 시 join key는 다음 원칙을 따릅니다.
@@ -46,6 +48,14 @@ raw ride_id와 raw JSON/zip은 `/DATA`에만 저장하고 Git에는 포함하지
 | data dictionary | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/data/processed/data_dictionary.csv` | 제외 |
 | station status snapshots | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/data/status_snapshots/` | 제외 |
 | station inventory snapshot | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/station_level/data/processed/station_inventory_snapshot.csv` | 제외 |
+| Seoul Ddareungi raw bikeList payload | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/seoul_ddareungi/data/raw/` | 제외 |
+| Seoul Ddareungi normalized inventory snapshot | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/seoul_ddareungi/data/processed/latest_inventory_snapshot.csv` | 제외 |
+| Seoul Ddareungi timestamped inventory snapshots | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/seoul_ddareungi/data/status_snapshots/` | 제외 |
+| Seoul Ddareungi live rebalancing priority | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/seoul_ddareungi/reports/rebalancing_priority.csv` | 제외 |
+| Seoul Ddareungi snapshot history | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/seoul_ddareungi/data/processed/snapshot_history.csv` | 제외 |
+| Seoul Ddareungi next-snapshot label panel | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/seoul_ddareungi/data/processed/next_snapshot_label_panel.csv` | 제외 |
+| Seoul Ddareungi rule validation reports | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/seoul_ddareungi/reports/validation_summary.json`, `validation_metrics.csv`, `validation_report.md` | 제외 |
+| Seoul Ddareungi ML baseline reports | `/DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience/seoul_ddareungi/reports/model_metrics.json`, `model_metrics.csv` | 제외 |
 
 Git에는 재현 코드와 경량 문서만 포함합니다. 데이터와 모델 파일은 재생성 가능 산출물로 취급합니다.
 
@@ -58,6 +68,24 @@ Git에는 재현 코드와 경량 문서만 포함합니다. 데이터와 모델
 | `season`, `yr`, `mnth`, `weekday`, `workingday`, `holiday` | 달력/운영 calendar 변수 |
 | `weathersit`, `temp`, `atemp`, `hum`, `windspeed` | 날씨 변수 |
 | `casual`, `registered`, `cnt` | 대여 수요 변수 |
+
+## 서울 따릉이 정규화 계약
+
+`latest_inventory_snapshot.csv`와 timestamped snapshot CSV는 다음 컬럼을 사용한다.
+
+| 컬럼 | 의미 |
+|---|---|
+| `station_id` | 서울 열린데이터광장 `stationId` |
+| `station_name` | 대여소명 |
+| `capacity` | 거치대 수 |
+| `bikes_available` | 현재 대여 가능 자전거 수 |
+| `docks_available` | `capacity - bikes_available`로 계산한 반납 가능 여유 |
+| `shared_rate` | 원천 API의 거치율 |
+| `station_lat`, `station_lon` | 지도 표시용 좌표 |
+| `captured_at_kst` | 수집 시각 |
+| `source` | `seoul_open_data_bikeList` |
+
+`next_snapshot_label_panel.csv`는 위 컬럼에 `bike_shortage_current`, `dock_shortage_current`, `bike_shortage_next_snapshot`, `dock_shortage_next_snapshot`, `next_gap_minutes`를 추가한다. `next_gap_minutes`가 허용 기준을 넘거나 다음 snapshot이 없으면 next label은 비워 둔다.
 
 ## 파생 피처 계약
 
