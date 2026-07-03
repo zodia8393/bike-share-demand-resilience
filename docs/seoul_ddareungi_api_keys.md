@@ -86,6 +86,14 @@ PYTHONPATH=src python3 scripts/run_seoul_ddareungi_validation.py
 
 이 명령은 timestamped inventory snapshot을 station별 시간축으로 연결해 `bike_shortage_next_snapshot`, `dock_shortage_next_snapshot`, `next_gap_minutes`를 생성한다. snapshot 수가 기본 기준인 24개보다 적으면 rule metric은 preliminary로 저장하되 validation/model status는 `NOT_READY`로 둔다.
 
+정기 수집에서는 capture와 validation을 한 번에 실행한다.
+
+```bash
+scripts/run_seoul_ddareungi_snapshot_monitor.sh
+```
+
+이 wrapper는 `SEOUL_OPEN_DATA_API_KEY`를 `.env` 또는 process environment에서 읽고, live snapshot 저장 후 validation report를 갱신한다. 성공 시 `/workspace/_codex/scripts/logs/seoul-ddareungi-snapshot-ok`와 일자별 marker를 남긴다.
+
 따릉이 product surface는 다음 local endpoint에서 확인한다.
 
 - `/api/seoul-ddareungi-priority`

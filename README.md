@@ -74,12 +74,13 @@
 
 ## 현재 상태
 
-- CI: PASS, 20 tests.
+- CI: PASS, 42 tests.
 - Station snapshot monitor: 매시 실행.
-- Snapshot readiness: 75/336 snapshots, latest `2026-07-02T14:15:03+09:00`, earliest ready at `2026-07-13T14:04:57+09:00`.
+- Snapshot readiness: 93/336 snapshots, latest `2026-07-03T08:15:04+09:00`, earliest ready at `2026-07-13T14:04:57+09:00`.
 - Prospective validation: evaluator implemented, current status `NOT_READY` until 2-week snapshot coverage is met.
 - Seoul Ddareungi adapter: schema check와 snapshot capture 통과, local dashboard에 live map/priority/validation readiness 표시.
-- Seoul Ddareungi validation: 3개 snapshot 기준 next-snapshot label과 preliminary rule precision은 생성되지만 기본 24 snapshot gate 전까지 `NOT_READY`.
+- Seoul Ddareungi snapshot monitor: hourly cron-ready wrapper implemented.
+- Seoul Ddareungi validation: 5개 snapshot 기준 next-snapshot label과 preliminary rule precision은 생성되지만 기본 24 snapshot gate 전까지 `NOT_READY`.
 - Public deployment: `NO_GO`. 현재는 local dashboard/API만 사용.
 
 ## Repo 구조
@@ -120,6 +121,7 @@ Station-level 확장과 dashboard:
 ```bash
 OUTPUT_ROOT=/tmp/bike-share-demand-resilience scripts/run_station_level.sh
 OUTPUT_ROOT=/tmp/bike-share-demand-resilience scripts/run_station_snapshot_monitor.sh
+OUTPUT_ROOT=/tmp/bike-share-demand-resilience scripts/run_seoul_ddareungi_snapshot_monitor.sh
 OUTPUT_ROOT=/tmp/bike-share-demand-resilience scripts/run_station_dashboard.sh
 ```
 
@@ -142,6 +144,7 @@ SYNTHETIC_FLAG=--synthetic TOP_STATIONS=10 OUTPUT_ROOT=/tmp/bike-share-station-s
 | 서울 따릉이 schema | `python3 scripts/check_seoul_ddareungi_schema.py --full-scan` | `seoul_ddareungi/reports/seoul_ddareungi_schema_check.json` |
 | 서울 따릉이 snapshot/priority | `python3 scripts/capture_seoul_ddareungi_snapshot.py` | `seoul_ddareungi/data/`, `seoul_ddareungi/reports/` |
 | 서울 따릉이 validation | `PYTHONPATH=src python3 scripts/run_seoul_ddareungi_validation.py` | `seoul_ddareungi/data/processed/`, `seoul_ddareungi/reports/` |
+| 서울 따릉이 hourly monitor | `scripts/run_seoul_ddareungi_snapshot_monitor.sh` | `seoul_ddareungi/data/`, `seoul_ddareungi/reports/`, cron marker |
 
 커밋된 문서로 먼저 검토하려면 [docs/modeling_protocol.md](docs/modeling_protocol.md), [docs/system_design.md](docs/system_design.md), [docs/data_flow_diagram.md](docs/data_flow_diagram.md), [docs/station_level_extension.md](docs/station_level_extension.md), [docs/prospective_shortage_validation.md](docs/prospective_shortage_validation.md), [docs/public_deployment_decision.md](docs/public_deployment_decision.md)를 보면 됩니다.
 
