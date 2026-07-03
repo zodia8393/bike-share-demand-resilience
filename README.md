@@ -1,103 +1,105 @@
-# 공공자전거 수요 회복력 예측 연구
+# Bike-Share Demand Resilience
 
 [![ci](https://github.com/zodia8393/bike-share-demand-resilience/actions/workflows/ci.yml/badge.svg)](https://github.com/zodia8393/bike-share-demand-resilience/actions/workflows/ci.yml)
 
-공공자전거 시간대별 수요 예측을 재배치 판단까지 연결한 프로젝트입니다. 핵심은 모델 점수뿐 아니라, 실패 구간·예측 불확실성·배포 보류 기준까지 함께 만든 것입니다.
+공공자전거 수요 예측을 **현장 운영 의사결정**으로 바꾸는 Stage 1 프로젝트입니다. UCI/Citi Bike benchmark에서 출발해 서울 따릉이 공개데이터 adapter까지 확장했고, 대여 불가, 반납 포화, 재배치 우선순위, 검증 전 배포 차단을 하나의 reproducible ML pipeline으로 묶었습니다.
 
-## 결론
+이 repo는 DecisionOps 포트폴리오의 upstream evidence layer입니다.
 
-한 줄로 말하면, **시간대별 수요를 WAPE 15.36%, R2 0.933 수준으로 예측하고, 그 예측을 피크/악천후 리스크와 재배치 우선순위로 바꾼 프로젝트**입니다.
+| Stage | 역할 | 연결 프로젝트 |
+|---|---|---|
+| Stage 1 | 수요 예측, station risk, 서울 따릉이 adapter, validation gate | 이 repo |
+| Stage 2 | ML 산출물을 agent/tool/eval/review queue로 변환 | [Agentic DecisionOps Workbench](https://github.com/zodia8393/data-scientist-career/tree/main/agentic-decisionops-workbench) |
+| Stage 3 | 지도, impact card, approval API, Docker demo로 제품화 | [DecisionOps Control Tower](https://github.com/zodia8393/decisionops-control-tower) |
 
-- 예측 모델: `gradient_boosting`, MAE 35.95건, WAPE 15.36%, R2 0.933.
-- 리스크 분석: 출퇴근 피크와 악천후에서 평균보다 더 흔들리는 구간을 확인.
-- 운영 연결: 예측값에 불확실성을 붙여 재배치 우선순위로 변환.
-- 데이터 확장: 35개 station의 trip, GBFS, weather, live inventory를 결합.
-- 한국 확장: 서울 따릉이 실시간 대여정보를 adapter로 연결해 지도 기반 대여 불가/반납 포화 우선순위를 생성.
-- 배포 판단: live snapshot이 75/336개까지 쌓였지만 2주 검증 기준에는 아직 부족해 외부 공개는 `NO_GO`.
+## What This Shows
 
-## 무엇을 만들었나
-
-| 구성 | 한 줄 설명 |
+| 평가자가 봐야 할 것 | 구현 증거 |
 |---|---|
-| 수요 예측 파이프라인 | 시간순 split으로 시간대별 수요를 예측하고 baseline, Ridge, Gradient Boosting을 비교 |
-| 실패 구간 분석 | 출퇴근, 주말, 악천후 구간에서 모델이 어디서 흔들리는지 확인 |
-| 예측 불확실성 | 단일 예측값에 예측구간을 붙여 운영 buffer로 사용 |
-| 재배치 우선순위 | 예측 수요와 fleet budget 제약을 이용해 재배치 후보를 산출 |
-| Station-level 확장 | trip history, GBFS station metadata/status, Open-Meteo weather를 station-hour 단위로 결합 |
-| 서울 따릉이 adapter | 서울 열린데이터광장 실시간 대여정보를 normalized inventory, 지도 point, 재배치 priority로 변환 |
-| Next-snapshot 검증 | snapshot history를 연결해 다음 snapshot의 대여 불가/반납 포화 label과 preliminary rule metric을 산출 |
-| 배포 보류 기준 | live inventory snapshot이 충분히 쌓이기 전까지 외부 공개를 막는 readiness check |
+| Product DS 문제 정의 | 단순 demand forecast가 아니라 재배치, 부족 위험, 포화 위험, 배포 보류 기준까지 연결 |
+| Time-aware ML discipline | random split 대신 시간순 split, bootstrap CI, conformal coverage, segment audit 사용 |
+| ML-to-ops translation | 예측값을 uncertainty-aware rebalancing priority와 reviewer-readable gate로 변환 |
+| Real-world adapter design | 미국 benchmark와 서울 따릉이 실시간 대여정보를 공통 inventory contract로 정규화 |
+| Responsible deployment | live snapshot 검증이 충분하기 전 public deploy와 성과 claim을 `NO_GO`로 차단 |
+| Downstream product readiness | Stage 2 agentic eval과 Stage 3 Control Tower가 읽을 수 있는 공개 안전 산출물 생성 |
 
-## 핵심 수치
+## Current Evidence
+
+최신 로컬 산출물 기준: 2026-07-03 KST.
 
 | 항목 | 값 | 의미 |
 |---|---:|---|
-| 시스템 수요 데이터 | UCI Bike Sharing Dataset, 17,379행 | 시간대별 수요 예측의 기준 데이터 |
-| 선택 모델 | `gradient_boosting` | baseline/Ridge보다 holdout 성능이 가장 안정적 |
-| 테스트 MAE / WAPE / R2 | 35.95건 / 15.36% / 0.933 | 평균 오차와 전체 패턴 설명력이 모두 양호 |
-| Bootstrap MAE 95% CI | [34.31, 37.61] | MAE가 우연한 단일 점수에 그치지 않음 |
-| Split-conformal 90% coverage | 92.3% | 예측구간이 목표 coverage를 충족 |
-| Station-level 데이터 | 35개 station, 25,200 station-hour rows | 집계 예측을 station 단위 운영 판단으로 확장 |
-| GBFS join rate | 97.1% | station metadata/status 결합 품질이 충분 |
-| Station-level best MAE | 1.006 | 점수 개선보다 부족 위험 순위 해석이 핵심 |
-| Snapshot readiness | 75 / 336 hourly snapshots | 2주 검증 목표의 22.3%, 최소 gate 75/268 = 28.0% |
-| 서울 따릉이 실시간 대여소 | 2,733 rows, 2,733 map points | 지도 기반 priority product surface 구현 |
-| 서울 따릉이 검증 상태 | `NOT_READY` | 3개 snapshot으로 preliminary rule metric은 가능하지만 validation/model claim은 보류 |
-| Public deploy decision | `NO_GO` | 검증 전 외부 공개를 보류 |
-| CI | GitHub Actions PASS, 20 tests | 재현 실행과 테스트가 자동 검증됨 |
+| UCI demand rows | 17,379 | 시간대별 수요 예측 기준 데이터 |
+| Best model | `gradient_boosting` | baseline/Ridge 대비 holdout 성능 우수 |
+| Test MAE / WAPE / R2 | 35.95 / 15.36% / 0.933 | 수요 규모 대비 예측 오차와 설명력 |
+| Bootstrap MAE 95% CI | [34.31, 37.61] | 단일 점수 우연성을 줄인 안정성 확인 |
+| Split-conformal 90% coverage | 92.3% | 운영 buffer로 쓸 예측구간 보정 |
+| Station model frame | 35 stations, 25,200 station-hour rows | 집계 수요를 station 단위 판단으로 확장 |
+| Citi Bike live inventory monitor | 2,412 stations, 100 snapshots | 2주 prospective validation을 위해 hourly snapshot 축적 중 |
+| Seoul Ddareungi latest snapshot | 2,731 stations, 31,955 bikes, capacity 33,019 | 서울 열린데이터광장 실시간 대여정보 adapter 동작 |
+| Seoul next-snapshot validation | 12 / 24 snapshots, `NOT_READY` | preliminary metric은 계산되지만 validation claim은 보류 |
+| Seoul priority output | top 50 candidates | 지도/API/Control Tower에서 읽을 재배치 후보 surface |
+| Public deploy decision | `NO_GO` | 실패가 아니라 검증 전 공개 차단 guardrail |
+| CI | GitHub Actions + pytest | pipeline, station, Seoul adapter, service test 자동 검증 |
 
-## 얻은 인사이트
+`NO_GO`는 의도한 안전장치입니다. live inventory는 현재 상태 데이터이므로, 충분한 snapshot이 쌓이기 전까지 "검증된 운영 성과"로 주장하지 않습니다.
 
-- 시간순 검증이 핵심입니다. 랜덤 split을 쓰면 미래 패턴이 섞여 실제 배포 성능보다 좋아 보일 수 있습니다.
-- 평균 성능만으로는 부족합니다. 출퇴근 피크와 악천후 구간은 별도 리스크로 관리해야 합니다.
-- 악천후 시나리오에서 평균 예측 수요가 약 17% 낮아졌습니다. 날씨는 운영 보수성을 조정하는 신호로 쓸 수 있습니다.
-- Station-level 모델의 점수 개선폭은 크지 않았습니다. 대신 station별 부족 위험 순위와 배포 보류 기준을 만든 것이 더 중요한 산출물입니다.
-- live inventory는 현재 상태 데이터이지 과거 정답 label이 아닙니다. 그래서 2주 snapshot이 쌓이기 전까지는 공개 배포를 막았습니다.
+## Product Surfaces
 
-## 방법 선택 이유
-
-| 선택 | 이유 |
-|---|---|
-| 시간순 검증 | 랜덤 split은 미래 정보가 섞일 수 있어 실제 운영 성능을 과대평가합니다. |
-| Baseline 비교 | 복잡한 모델이 단순 시간대 패턴보다 정말 나은지 먼저 확인했습니다. |
-| 여러 metric | MAPE 하나로는 수요량 scale과 0 근처 값을 안정적으로 설명하기 어렵습니다. |
-| 예측구간 | 예측값 하나보다 "얼마나 여유를 둬야 하는가"가 운영에 더 중요합니다. |
-| 구간별 오차 분석 | 전체 평균에 가려지는 출퇴근·주말·악천후 실패를 찾기 위해 사용했습니다. |
-| Station-level 결합 | 집계 수요 예측을 실제 station capacity와 inventory 판단으로 확장했습니다. |
-| 배포 보류 기준 | 검증되지 않은 live snapshot을 production 성과처럼 과장하지 않기 위해 사용했습니다. |
-
-## 대표 시각화
-
-| 수요 패턴 | 예측 불확실성 | 재배치 의사결정 |
+| Surface | 설명 | 주요 산출물 |
 |---|---|---|
-| ![요일과 시간대별 평균 수요](docs/assets/eda_weekday_hour_heatmap.png) | ![Split-conformal 예측구간](docs/assets/uncertainty_conformal_intervals.png) | ![제약 기반 재배치 배정](docs/assets/optimization_rebalancing_allocation.png) |
+| System demand forecasting | 시간대별 수요 예측, uncertainty, segment audit | `reports/run_summary.json`, `reports/model_metrics.csv` |
+| Rebalancing optimization | 예측 수요와 fleet budget 제약으로 후보 배정 | `reports/rebalancing_optimization.csv` |
+| Station-level extension | trip, GBFS metadata/status, weather join 기반 station risk | `station_level/reports/station_run_summary.json` |
+| Snapshot readiness | 2주 hourly snapshot coverage와 prospective label 생성 | `station_level/reports/station_snapshot_readiness.json` |
+| Seoul Ddareungi adapter | 실시간 대여소 상태, 좌표, 거치율, 지도 point 정규화 | `seoul_ddareungi/reports/latest_inventory_snapshot_summary.json` |
+| Seoul priority and validation | 대여 불가/반납 포화 우선순위와 next-snapshot rule check | `seoul_ddareungi/reports/rebalancing_priority.csv`, `validation_summary.json` |
+| Local dashboard/API | Stage 3가 소비할 public-safe summary payload | `scripts/run_station_dashboard.sh` |
 
-## 현재 상태
+## Demo Evidence
 
-- CI: PASS, 42 tests.
-- Station snapshot monitor: 매시 실행.
-- Snapshot readiness: 93/336 snapshots, latest `2026-07-03T08:15:04+09:00`, earliest ready at `2026-07-13T14:04:57+09:00`.
-- Prospective validation: evaluator implemented, current status `NOT_READY` until 2-week snapshot coverage is met.
-- Seoul Ddareungi adapter: schema check와 snapshot capture 통과, local dashboard에 live map/priority/validation readiness 표시.
-- Seoul Ddareungi snapshot monitor: hourly cron-ready wrapper implemented.
-- Seoul Ddareungi validation: 5개 snapshot 기준 next-snapshot label과 preliminary rule precision은 생성되지만 기본 24 snapshot gate 전까지 `NOT_READY`.
-- Public deployment: `NO_GO`. 현재는 local dashboard/API만 사용.
+| Demand pattern | Uncertainty | Rebalancing decision |
+|---|---|---|
+| ![Weekday-hour demand heatmap](docs/assets/eda_weekday_hour_heatmap.png) | ![Split-conformal intervals](docs/assets/uncertainty_conformal_intervals.png) | ![Constrained rebalancing allocation](docs/assets/optimization_rebalancing_allocation.png) |
 
-## Repo 구조
+## Architecture
 
 ```text
-.
-├── src/bike_share_resilience/   # forecasting, station pipeline, dashboard service
-├── scripts/                     # 재현 실행, snapshot, deploy readiness check
-├── tests/                       # pipeline, station, service tests
-├── docs/                        # protocol, station extension, deployment decision
-├── pyproject.toml
-└── requirements.txt
+UCI Bike Sharing Dataset
+        |
+        v
+time-aware forecasting pipeline
+  - baseline / Ridge / Gradient Boosting
+  - holdout metrics, bootstrap CI, conformal interval
+  - segment residual audit
+        |
+        v
+rebalancing optimization artifacts
+
+Citi Bike trips + GBFS + Open-Meteo
+        |
+        v
+station-level demand and live inventory monitor
+  - station risk ranking
+  - hourly snapshot history
+  - prospective validation readiness
+
+Seoul Ddareungi Open Data bikeList API
+        |
+        v
+city adapter contract
+  - normalized inventory
+  - map coordinates
+  - bike shortage / dock shortage labels
+  - priority candidates
+        |
+        v
+Agentic Workbench and DecisionOps Control Tower
 ```
 
-대용량 데이터, 모델 pickle, 그림, 보고서 산출물은 Git에 넣지 않습니다. 산출물 위치는 `OUTPUT_ROOT`로 지정하며, 아래에는 로컬 절대경로 대신 재생성 명령과 `OUTPUT_ROOT` 기준 상대 위치를 문서화합니다.
+자세한 설계는 [docs/system_design.md](docs/system_design.md), 한국어 DFD는 [docs/data_flow_diagram.md](docs/data_flow_diagram.md)를 봅니다.
 
-## 실행 방법
+## Quick Start
 
 ```bash
 git clone https://github.com/zodia8393/bike-share-demand-resilience.git
@@ -105,6 +107,7 @@ cd bike-share-demand-resilience
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
+
 export OUTPUT_ROOT=/tmp/bike-share-demand-resilience
 export REPORT_DIR=/tmp/bike-share-demand-resilience/portfolio_reports
 scripts/run_all.sh
@@ -116,40 +119,46 @@ scripts/run_all.sh
 PYTHONPATH=src python3 -m pytest tests -q
 ```
 
-Station-level 확장과 dashboard:
+Station-level과 dashboard:
 
 ```bash
 OUTPUT_ROOT=/tmp/bike-share-demand-resilience scripts/run_station_level.sh
 OUTPUT_ROOT=/tmp/bike-share-demand-resilience scripts/run_station_snapshot_monitor.sh
-OUTPUT_ROOT=/tmp/bike-share-demand-resilience scripts/run_seoul_ddareungi_snapshot_monitor.sh
 OUTPUT_ROOT=/tmp/bike-share-demand-resilience scripts/run_station_dashboard.sh
 ```
 
-네트워크 없는 smoke 실행:
+서울 따릉이 adapter는 서울 열린데이터광장 실시간 대여정보 key가 필요합니다. 값은 `.env` 또는 shell environment에 두고, README나 log에 노출하지 않습니다.
+
+```bash
+export SEOUL_OPEN_DATA_API_KEY="<issued-key>"
+python3 scripts/check_seoul_ddareungi_schema.py --full-scan
+python3 scripts/capture_seoul_ddareungi_snapshot.py
+PYTHONPATH=src python3 scripts/run_seoul_ddareungi_validation.py
+```
+
+네트워크 없는 CI/smoke:
 
 ```bash
 SYNTHETIC_FLAG=--synthetic TOP_STATIONS=10 OUTPUT_ROOT=/tmp/bike-share-station-smoke scripts/run_station_level.sh
 ```
 
-## 산출물 확인 방법
+## Repository Guide
 
-핵심 문서는 `docs/`에 커밋하고, 대용량 데이터·모델·생성 report는 `OUTPUT_ROOT` 아래에 재생성합니다. GitHub README에는 로컬 절대경로 대신 재현 명령과 상대 위치만 남겼습니다.
+| 경로 | 내용 |
+|---|---|
+| [src/bike_share_resilience](src/bike_share_resilience) | forecasting, station pipeline, Seoul adapter, validation, dashboard service |
+| [scripts](scripts) | 재현 실행, snapshot capture, readiness check, dashboard runner |
+| [tests](tests) | pipeline, station, Seoul adapter, validation, service regression tests |
+| [docs/modeling_protocol.md](docs/modeling_protocol.md) | 모델링과 검증 protocol |
+| [docs/station_level_extension.md](docs/station_level_extension.md) | station-level 확장 설계 |
+| [docs/prospective_shortage_validation.md](docs/prospective_shortage_validation.md) | snapshot 기반 prospective validation |
+| [docs/public_deployment_decision.md](docs/public_deployment_decision.md) | public deploy `GO/NO_GO` 판단 |
+| [docs/seoul_ddareungi_api_keys.md](docs/seoul_ddareungi_api_keys.md) | 서울 따릉이 API key와 보안 운용 |
 
-| 보고 싶은 것 | 명령 | 위치 |
-|---|---|---|
-| 시스템 예측 결과 | `scripts/run_all.sh` | `reports/`, `figures/` |
-| Station-level 결과 | `scripts/run_station_level.sh` | `station_level/reports/` |
-| Inventory snapshot과 readiness | `scripts/run_station_snapshot_monitor.sh` | `station_level/data/processed/`, `station_level/reports/` |
-| Dashboard/API 상태 | `scripts/run_station_dashboard.sh` 또는 `station_service --check` | local API/dashboard |
-| 서울 따릉이 schema | `python3 scripts/check_seoul_ddareungi_schema.py --full-scan` | `seoul_ddareungi/reports/seoul_ddareungi_schema_check.json` |
-| 서울 따릉이 snapshot/priority | `python3 scripts/capture_seoul_ddareungi_snapshot.py` | `seoul_ddareungi/data/`, `seoul_ddareungi/reports/` |
-| 서울 따릉이 validation | `PYTHONPATH=src python3 scripts/run_seoul_ddareungi_validation.py` | `seoul_ddareungi/data/processed/`, `seoul_ddareungi/reports/` |
-| 서울 따릉이 hourly monitor | `scripts/run_seoul_ddareungi_snapshot_monitor.sh` | `seoul_ddareungi/data/`, `seoul_ddareungi/reports/`, cron marker |
+## Boundaries
 
-커밋된 문서로 먼저 검토하려면 [docs/modeling_protocol.md](docs/modeling_protocol.md), [docs/system_design.md](docs/system_design.md), [docs/data_flow_diagram.md](docs/data_flow_diagram.md), [docs/station_level_extension.md](docs/station_level_extension.md), [docs/prospective_shortage_validation.md](docs/prospective_shortage_validation.md), [docs/public_deployment_decision.md](docs/public_deployment_decision.md)를 보면 됩니다.
-
-## 한계
-
-- UCI 데이터는 시스템 집계 자료라 station capacity와 live inventory를 포함하지 않습니다. 이 한계는 station-level extension으로 보완했습니다.
-- 날씨 충격 분석은 인과 추정이 아니라 모델 기반 민감도 분석입니다.
-- live `station_status`는 아직 true historical shortage label이 아닙니다. 2주 snapshot validation이 끝날 때까지 public deployment는 `NO_GO`입니다.
+- 재배치 우선순위는 decision-support artifact이며 실제 현장 dispatch를 실행하지 않습니다.
+- 서울 따릉이 성과 claim은 snapshot coverage와 prospective validation이 충분해질 때까지 보류합니다.
+- API key, raw private credential, `.env` 값은 Git, report, screenshot에 남기지 않습니다.
+- 대용량 원천 데이터와 생성 산출물은 `OUTPUT_ROOT` 아래에 두고 Git에는 넣지 않습니다.
+- Stage 2/3 downstream system은 이 repo의 `NO_GO`, `NOT_READY`, blocker를 유지해야 합니다.
