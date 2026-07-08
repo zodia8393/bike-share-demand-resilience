@@ -6,8 +6,8 @@ OUTPUT_ROOT="${OUTPUT_ROOT:-/DATA/HJ/prj/data-scientist-career/projects/bike-sha
 SYNTHETIC_FLAG="${SYNTHETIC_FLAG:-}"
 
 if [ -z "${LOG_DIR:-}" ]; then
-  if mkdir -p /workspace/_codex/scripts/logs 2>/dev/null; then
-    LOG_DIR="/workspace/_codex/scripts/logs"
+  if mkdir -p /workspace/infra/codex/scripts/logs 2>/dev/null; then
+    LOG_DIR="/workspace/infra/codex/scripts/logs"
   else
     LOG_DIR="$OUTPUT_ROOT/station_level/reports"
   fi

@@ -11,8 +11,8 @@ MIN_ROWS="${MIN_ROWS:-2000}"
 PRIORITY_TOP_N="${PRIORITY_TOP_N:-50}"
 
 if [ -z "${LOG_DIR:-}" ]; then
-  if mkdir -p /workspace/_codex/scripts/logs 2>/dev/null; then
-    LOG_DIR="/workspace/_codex/scripts/logs"
+  if mkdir -p /workspace/infra/codex/scripts/logs 2>/dev/null; then
+    LOG_DIR="/workspace/infra/codex/scripts/logs"
   else
     LOG_DIR="$OUTPUT_ROOT/seoul_ddareungi/reports"
   fi

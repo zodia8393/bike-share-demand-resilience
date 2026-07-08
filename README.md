@@ -25,7 +25,7 @@
 
 ## Current Evidence
 
-최신 로컬 산출물 기준: 2026-07-03 KST.
+최신 로컬 산출물 기준: 2026-07-07 KST.
 
 | 항목 | 값 | 의미 |
 |---|---:|---|
@@ -35,9 +35,10 @@
 | Bootstrap MAE 95% CI | [34.31, 37.61] | 단일 점수 우연성을 줄인 안정성 확인 |
 | Split-conformal 90% coverage | 92.3% | 운영 buffer로 쓸 예측구간 보정 |
 | Station model frame | 35 stations, 25,200 station-hour rows | 집계 수요를 station 단위 판단으로 확장 |
-| Citi Bike live inventory monitor | 2,412 stations, 100 snapshots | 2주 prospective validation을 위해 hourly snapshot 축적 중 |
-| Seoul Ddareungi latest snapshot | 2,731 stations, 31,955 bikes, capacity 33,019 | 서울 열린데이터광장 실시간 대여정보 adapter 동작 |
-| Seoul next-snapshot validation | 12 / 24 snapshots, `NOT_READY` | preliminary metric은 계산되지만 validation claim은 보류 |
+| Citi Bike live inventory monitor | 2,412 stations, 191 snapshots | 2주 prospective validation을 위해 hourly snapshot 축적 중, minimum gate까지 77개 부족 |
+| Seoul Ddareungi latest snapshot | 2,733 stations, 103 snapshots | 서울 열린데이터광장 실시간 대여정보 adapter 동작 |
+| Seoul next-snapshot validation | 103 / 24 snapshots, `READY` | 101 evaluated snapshots, 276,000 label rows, global Precision@50 0.9976 |
+| Seoul balanced action validation | send_bikes 2,525 / remove_bikes 2,525 recommendations | balanced Precision@50 0.9552, send_bikes precision 0.9121, remove_bikes precision 0.9984 |
 | Seoul priority output | top 50 candidates | 지도/API/Control Tower에서 읽을 재배치 후보 surface |
 | Public deploy decision | `NO_GO` | 실패가 아니라 검증 전 공개 차단 guardrail |
 | CI | GitHub Actions + pytest | pipeline, station, Seoul adapter, service test 자동 검증 |
@@ -158,7 +159,7 @@ SYNTHETIC_FLAG=--synthetic TOP_STATIONS=10 OUTPUT_ROOT=/tmp/bike-share-station-s
 ## Boundaries
 
 - 재배치 우선순위는 decision-support artifact이며 실제 현장 dispatch를 실행하지 않습니다.
-- 서울 따릉이 성과 claim은 snapshot coverage와 prospective validation이 충분해질 때까지 보류합니다.
+- 서울 따릉이 next-snapshot validation은 2026-07-07 KST 기준 `READY`입니다. Global top-K metric은 `remove_bikes` 후보 중심이고, balanced action metric은 `send_bikes`와 `remove_bikes`를 분리해 보조 근거로 사용합니다. 현장 운영 성과 claim은 별도 impact simulator 전까지 보류합니다.
 - API key, raw private credential, `.env` 값은 Git, report, screenshot에 남기지 않습니다.
 - 대용량 원천 데이터와 생성 산출물은 `OUTPUT_ROOT` 아래에 두고 Git에는 넣지 않습니다.
 - Stage 2/3 downstream system은 이 repo의 `NO_GO`, `NOT_READY`, blocker를 유지해야 합니다.

@@ -1,6 +1,6 @@
 # 데이터 흐름도(DFD)
 
-최종 업데이트: 2026-07-02 KST
+최종 업데이트: 2026-07-07 KST
 
 ## 범위
 
@@ -122,7 +122,7 @@ flowchart LR
 | F8 | report/readiness | local API/dashboard | station risk와 readiness summary | deploy gate 통과 전 local review만 허용 |
 | F9 | Stage 1 산출물 | Stage 2/3 | 공개 가능한 판단 근거 | downstream system은 `NO_GO` blocker를 보존해야 함 |
 | F10 | 서울 따릉이 공개데이터 | 서울 adapter | 실시간 대여소 상태, 거치율, 좌표 | API rate/row-count/source contract check |
-| F10a | 서울 snapshot history | 서울 validation runner | `bike_shortage_next_snapshot`, `dock_shortage_next_snapshot`, rule precision@10/50, ML readiness | snapshot 24개 전까지 validation/model은 `NOT_READY` |
+| F10a | 서울 snapshot history | 서울 validation runner | `bike_shortage_next_snapshot`, `dock_shortage_next_snapshot`, global/balanced rule precision@10/50, ML readiness | 2026-07-07 KST 기준 103 snapshots로 validation/model `READY`; global metric은 `remove_bikes` 중심이고 balanced action metric이 send/remove를 분리 검증 |
 | F11 | model/eval/snapshot 산출물 | decision impact simulator | risk, uncertainty, inventory, capacity, readiness | baseline policy와 model policy를 같은 제약에서 비교 |
 | F12 | impact report | Stage 2/3 | 추천 action, 기대 shortage/overflow 감소, confidence, blocker | low-impact 또는 weak-evidence action은 review/refusal |
 
@@ -136,12 +136,12 @@ flowchart LR
 | action 경계 | 재배치 우선순위는 decision support artifact이며 현장 작업을 직접 dispatch하지 않는다. |
 | public deploy 경계 | station snapshot readiness와 prospective validation이 문서화된 gate를 충족할 때까지 public deployment는 `NO_GO`다. |
 | adapter 경계 | 도시별 데이터 차이는 adapter에서 흡수하고, 후속 feature/eval/decision simulator는 공통 contract만 읽는다. |
-| impact claim 경계 | 서울 따릉이 성과는 충분한 snapshot과 prospective validation 전까지 claim하지 않는다. |
+| impact claim 경계 | 서울 따릉이 next-snapshot validation과 balanced action metric은 `READY`지만, decision impact simulator 전에는 재배치 운영 성과로 claim하지 않는다. |
 
 ## 현재 운영 상태
 
 - Snapshot monitor는 매시 실행되도록 예약되어 있다.
 - 현재 station snapshot readiness는 `docs/public_deployment_decision.md`에 기록되어 있다.
 - Local API/dashboard는 검토용으로 사용할 수 있지만, 외부 공개는 readiness gate가 계속 차단한다.
-- 서울 따릉이 adapter는 실시간 snapshot, 지도 point, priority, preliminary next-snapshot validation까지 구현되어 있다.
-- 확정된 다음 방향은 서울 snapshot coverage 축적과 decision impact simulator 추가다.
+- 서울 따릉이 adapter는 실시간 snapshot, 지도 point, priority, next-snapshot validation까지 구현되어 있고, 2026-07-07 KST 기준 validation/model이 `READY`다.
+- Global top-K의 `remove_bikes` 편향은 balanced action metric으로 보조 검증했고, 확정된 다음 방향은 decision impact simulator 추가다.

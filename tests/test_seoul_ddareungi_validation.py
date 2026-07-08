@@ -85,6 +85,53 @@ def write_ml_ready_snapshots(root: Path) -> None:
         write_snapshot(root, stamp, rows)
 
 
+def write_unbalanced_priority_snapshots(root: Path) -> None:
+    first_rows = [
+        {
+            "station_id": "A",
+            "station_name": "Dock A",
+            "capacity": 10,
+            "bikes_available": 10,
+            "docks_available": 0,
+            "shared_rate": 100,
+            "station_lat": 37.5,
+            "station_lon": 127.0,
+            "captured_at_kst": "2026-07-02T19:00:00+09:00",
+            "source": "fixture",
+        },
+        {
+            "station_id": "B",
+            "station_name": "Dock B",
+            "capacity": 10,
+            "bikes_available": 10,
+            "docks_available": 0,
+            "shared_rate": 100,
+            "station_lat": 37.5,
+            "station_lon": 127.0,
+            "captured_at_kst": "2026-07-02T19:00:00+09:00",
+            "source": "fixture",
+        },
+        {
+            "station_id": "Z",
+            "station_name": "Bike Z",
+            "capacity": 10,
+            "bikes_available": 0,
+            "docks_available": 10,
+            "shared_rate": 0,
+            "station_lat": 37.5,
+            "station_lon": 127.0,
+            "captured_at_kst": "2026-07-02T19:00:00+09:00",
+            "source": "fixture",
+        },
+    ]
+    second_rows = [
+        {**row, "captured_at_kst": "2026-07-02T19:10:00+09:00"}
+        for row in first_rows
+    ]
+    write_snapshot(root, "20260702_190000", first_rows)
+    write_snapshot(root, "20260702_191000", second_rows)
+
+
 def test_next_snapshot_label_panel_marks_future_shortage(tmp_path):
     write_three_snapshots(tmp_path)
     history = load_snapshot_history(tmp_path)
@@ -116,6 +163,25 @@ def test_rule_priority_validation_scores_send_and_remove_actions(tmp_path):
     assert summary["send_bikes_count"] > 0
     assert summary["remove_bikes_count"] > 0
     assert not metrics.empty
+
+
+def test_balanced_action_metrics_keep_send_bikes_visible_when_global_topk_is_remove_heavy(tmp_path):
+    write_unbalanced_priority_snapshots(tmp_path)
+    history = load_snapshot_history(tmp_path)
+    config = SeoulValidationConfig(min_snapshots_for_validation=2, top_ks=(2,))
+    panel = build_next_snapshot_label_panel(history, config)
+
+    summary, metrics = evaluate_rule_priority(panel, config)
+    global_top2 = metrics.loc[metrics["metric_mode"].eq("global_topk") & metrics["top_k"].eq(2)].iloc[0]
+    balanced_top2 = metrics.loc[metrics["metric_mode"].eq("balanced_action") & metrics["top_k"].eq(2)].iloc[0]
+
+    assert summary["validation_status"] == "READY"
+    assert global_top2["send_bikes_count"] == 0
+    assert global_top2["remove_bikes_count"] == 2
+    assert balanced_top2["send_bikes_count"] == 1
+    assert balanced_top2["remove_bikes_count"] == 1
+    assert summary["balanced_send_bikes_count"] == 1
+    assert summary["balanced_remove_bikes_count"] == 1
 
 
 def test_analyze_seoul_snapshots_writes_reports_and_not_ready_model(tmp_path):
