@@ -6,7 +6,8 @@ OUTPUT_ROOT="${OUTPUT_ROOT:-/DATA/HJ/prj/data-scientist-career/projects/bike-sha
 REPORT_DIR="${REPORT_DIR:-/DATA/HJ/prj/data-scientist-career/reports}"
 
 cd "$PROJECT_ROOT"
+mkdir -p "$OUTPUT_ROOT/reports"
+python3 -m pytest tests --junitxml="$OUTPUT_ROOT/reports/pytest.xml"
 PYTHONPATH=src python3 -m bike_share_resilience.pipeline \
   --output-root "$OUTPUT_ROOT" \
   --report-dir "$REPORT_DIR"
-python3 -m pytest tests

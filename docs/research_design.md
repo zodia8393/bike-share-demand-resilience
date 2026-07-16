@@ -6,6 +6,7 @@
 2. 출퇴근 피크, 악천후, 주말, 야간 segment에서 오차와 conformal coverage는 안정적으로 유지되는가?
 3. 예측값과 불확실성 폭을 재배치 staging target으로 바꾸면 운영자가 쓸 수 있는 의사결정 단위가 되는가?
 4. station-hour 수요와 station capacity, hourly weather를 결합하면 shortage-risk proxy 기반 human review queue를 만들 수 있는가?
+5. Frozen prospective cohort에서 expanding-window 성능, feature ablation, 분포 drift, 운영 segment failure가 단일 holdout 결론을 지지하는가?
 
 ## Evidence Plan
 
@@ -18,7 +19,9 @@
 - Failure audit: commute peak, bad weather, weekend, night segment의 residual과 coverage를 분리한다.
 - Decision impact: conformal upper bound를 수요 bucket별 staging target으로 변환하고 fleet budget 제약 최적화를 실행한다.
 - Station-level extension: Jersey City trip history, GBFS station metadata/status, Open-Meteo weather를 결합해 station-hour demand forecast, live inventory shortage signal, rebalancing priority를 산출한다.
+- Prospective hardening: 50% 초기 train 이후 3-fold expanding window에서 persistence/profile/logistic을 비교하고, full/no-current-state/temporal-only feature ablation을 수행한다.
+- Drift/failure audit: shortage-rate 차이, inventory-pressure PSI, hour-distribution total variation, station coverage와 commute/weekend/night/high-pressure segment metric을 기록한다.
 
 ## 한계와 윤리
 
-현재 공개 repo는 raw 사용자/trip identifier와 raw 좌표 데이터를 포함하지 않는다. station-level 확장은 공개 Citi Bike trip/status와 Open-Meteo를 `/DATA`에 보관해 재현하되, 실제 dispatch claim은 하지 않고, true shortage label을 만들기 위한 시간별 status snapshot 축적과 event/maintenance feature 필요성을 `research_gap_report.md`에 명시한다.
+현재 공개 repo는 raw 사용자/trip identifier와 raw 좌표 데이터를 포함하지 않는다. Station-level 확장은 공개 Citi Bike trip/status와 Open-Meteo를 `/DATA`에 보관해 재현하되 실제 dispatch claim은 하지 않는다. Frozen cohort validation이 통과했어도 night segment 취약성과 event/maintenance feature 부재를 `research_gap_report.md`에 명시한다.

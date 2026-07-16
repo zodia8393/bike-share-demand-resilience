@@ -105,8 +105,8 @@ def test_load_env_file_and_resolve_api_key_without_printing_secret(tmp_path):
         "\n".join(
             [
                 "# comment",
-                "export SEOUL_OPEN_DATA_API_KEY='secret-value'",
-                "DATA_GO_KR_SERVICE_KEY=secondary-secret",
+                "export SEOUL_OPEN_DATA_API_KEY='test-api-key'",
+                "DATA_GO_KR_SERVICE_KEY=test-secondary-key",
             ]
         ),
         encoding="utf-8",
@@ -115,9 +115,9 @@ def test_load_env_file_and_resolve_api_key_without_printing_secret(tmp_path):
     values = load_env_file(env_file)
     key = resolve_api_key(env={}, env_file=env_file)
 
-    assert values["SEOUL_OPEN_DATA_API_KEY"] == "secret-value"
-    assert values["DATA_GO_KR_SERVICE_KEY"] == "secondary-secret"
-    assert key == "secret-value"
+    assert values["SEOUL_OPEN_DATA_API_KEY"] == "test-api-key"
+    assert values["DATA_GO_KR_SERVICE_KEY"] == "test-secondary-key"
+    assert key == "test-api-key"
 
 
 def test_redacted_url_never_contains_real_key():
@@ -221,7 +221,7 @@ def test_write_inventory_snapshot_writes_csv_and_summary_without_secret(tmp_path
     assert latest.exists()
     assert snapshot.exists()
     assert paths["raw_snapshot_path"].endswith("20260702_190000_bikeList_raw.json")
-    assert "secret-value" not in summary_text
+    assert "test-api-key" not in summary_text
 
 
 def test_build_rebalancing_priority_flags_live_shortage_actions():

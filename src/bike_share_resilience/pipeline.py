@@ -6,6 +6,7 @@ import math
 import pickle
 import urllib.request
 import zipfile
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
@@ -672,63 +673,209 @@ def build_quality_gate_checks(metrics: dict, metadata: dict, row_counts: dict[st
     return pd.DataFrame(checks)
 
 
-def build_quality_gate_scores(metrics: dict, metadata: dict, row_counts: dict[str, int]) -> pd.DataFrame:
+def _load_json_object(path: Path) -> dict:
+    if not path.is_file():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _read_pytest_evidence(pytest_report: Path, project_root: Path) -> dict:
+    test_count = 0
+    test_failures = 0
+    test_errors = 0
+    if pytest_report.is_file():
+        try:
+            test_root = ET.parse(pytest_report).getroot()
+            suites = (
+                [test_root]
+                if test_root.tag.endswith("testsuite")
+                else list(test_root.findall("./testsuite"))
+            )
+            if not suites:
+                suites = list(test_root.findall(".//testsuite"))
+            test_count = sum(int(suite.attrib.get("tests", 0)) for suite in suites)
+            test_failures = sum(int(suite.attrib.get("failures", 0)) for suite in suites)
+            test_errors = sum(int(suite.attrib.get("errors", 0)) for suite in suites)
+        except (ET.ParseError, OSError, ValueError):
+            test_count = 0
+
+    source_files = [
+        *project_root.glob("src/**/*.py"),
+        *project_root.glob("tests/**/*.py"),
+        *project_root.glob("scripts/*.sh"),
+        project_root / "pyproject.toml",
+    ]
+    latest_source_mtime = max(
+        (path.stat().st_mtime for path in source_files if path.is_file()),
+        default=0.0,
+    )
+    evidence_fresh = bool(
+        pytest_report.is_file() and pytest_report.stat().st_mtime >= latest_source_mtime
+    )
+    return {
+        "tests_passed": bool(
+            test_count > 0 and test_failures == 0 and test_errors == 0 and evidence_fresh
+        ),
+        "test_count": test_count,
+        "test_failures": test_failures,
+        "test_errors": test_errors,
+        "test_evidence_fresh": evidence_fresh,
+    }
+
+
+def _presentation_ready(output_root: Path, project_root: Path) -> bool:
+    readme_path = project_root / "README.md"
+    readme = readme_path.read_text(encoding="utf-8") if readme_path.is_file() else ""
+    readme_markers = [
+        "## 결론",
+        "## 핵심 수치",
+        "## 얻은 인사이트",
+        "## 방법 선택 이유",
+        "## 대표 시각화",
+    ]
+    presentation_files = [
+        project_root / "docs" / "assets" / "eda_weekday_hour_heatmap.png",
+        project_root / "docs" / "assets" / "uncertainty_conformal_intervals.png",
+        project_root / "docs" / "assets" / "optimization_rebalancing_allocation.png",
+        output_root / "reports" / "final_report.md",
+    ]
+    return all(marker in readme for marker in readme_markers) and all(
+        path.is_file() and path.stat().st_size > 0 for path in presentation_files
+    )
+
+
+def load_advanced_quality_evidence(
+    output_root: Path,
+    source_root: Path | None = None,
+) -> dict:
+    report_dir = output_root / "station_level" / "reports"
+    validation = _load_json_object(report_dir / "station_prospective_validation.json")
+    readiness = _load_json_object(report_dir / "station_snapshot_readiness.json")
+    deploy = _load_json_object(report_dir / "station_public_deploy_readiness.json")
+    advanced_artifacts = [
+        report_dir / "station_prospective_rolling_origin_metrics.csv",
+        report_dir / "station_prospective_feature_ablation.csv",
+        report_dir / "station_prospective_drift_audit.csv",
+        report_dir / "station_prospective_failure_audit.csv",
+    ]
+    project_root = source_root or Path(__file__).resolve().parents[2]
+    test_evidence = _read_pytest_evidence(
+        output_root / "reports" / "pytest.xml",
+        project_root,
+    )
+    return {
+        "prospective_pass": validation.get("validation_status") == "PASS",
+        "advanced_validation_ready": bool(validation.get("advanced_validation_ready")),
+        "label_rows": int(validation.get("label_rows") or 0),
+        "rolling_origin_fold_count": int(validation.get("rolling_origin_fold_count") or 0),
+        "rolling_origin_model_rows": int(validation.get("rolling_origin_model_rows") or 0),
+        "feature_ablation_rows": int(validation.get("feature_ablation_rows") or 0),
+        "drift_checks_passed": int(validation.get("drift_checks_passed") or 0),
+        "drift_check_count": int(validation.get("drift_check_count") or 0),
+        "failure_audit_segments": int(validation.get("failure_audit_segments") or 0),
+        "frozen_cohort_ready": bool(
+            readiness.get("ready_for_prospective_validation")
+            and readiness.get("snapshot_cutoff_at")
+            and int(readiness.get("snapshot_count") or 0)
+            >= int(readiness.get("target_snapshots") or 0)
+            and int(readiness.get("source_snapshot_count") or 0)
+            >= int(readiness.get("snapshot_count") or 0)
+        ),
+        "public_evidence_go": deploy.get("decision") == "GO",
+        "advanced_artifacts_present": all(
+            path.is_file() and path.stat().st_size > 0 for path in advanced_artifacts
+        ),
+        "presentation_ready": _presentation_ready(output_root, project_root),
+        **test_evidence,
+    }
+
+
+def build_quality_gate_scores(
+    metrics: dict,
+    metadata: dict,
+    row_counts: dict[str, int],
+    advanced_evidence: dict | None = None,
+) -> pd.DataFrame:
     data_ready = metadata["effective_rows"] >= 17000 and "cnt" in metadata["effective_columns"]
     fallback_used = metadata.get("fallback_used", "unknown")
     validation_ready = row_counts["train_rows"] > row_counts["valid_rows"] > 0 and row_counts["test_rows"] > 0
     model_ready = metrics["wape"] <= 20 and metrics["r2"] >= 0.90
     uncertainty_ready = 0.88 <= metrics["conformal_test_coverage"] <= 0.96
     ci_ready = metrics["mae_ci_low"] <= metrics["mae"] <= metrics["mae_ci_high"]
+    advanced = advanced_evidence or {}
+    prospective_ready = bool(
+        advanced.get("prospective_pass")
+        and advanced.get("advanced_validation_ready")
+        and advanced.get("advanced_artifacts_present")
+    )
+    rolling_ready = bool(
+        advanced.get("rolling_origin_fold_count", 0) >= 3
+        and advanced.get("rolling_origin_model_rows", 0) >= 9
+    )
+    drift_ready = bool(
+        advanced.get("drift_check_count", 0) >= 4
+        and advanced.get("drift_checks_passed") == advanced.get("drift_check_count")
+        and advanced.get("failure_audit_segments", 0) >= 5
+    )
+    ablation_ready = advanced.get("feature_ablation_rows", 0) >= 3
+    frozen_ready = bool(advanced.get("frozen_cohort_ready"))
+    deploy_ready = bool(advanced.get("public_evidence_go"))
+    presentation_ready = bool(advanced.get("presentation_ready"))
+    tests_passed = bool(advanced.get("tests_passed"))
+    advanced_score = 96.0
     rows = [
         {
             "category": "problem framing and business/career relevance",
-            "score": 95 if model_ready else 82,
-            "evidence": "수요 예측을 재배치 staging target 의사결정으로 연결",
+            "score": advanced_score if model_ready and prospective_ready and deploy_ready else 95 if model_ready else 82,
+            "evidence": "수요 예측→재배치→prospective evidence GO 의사결정 연결" if prospective_ready and deploy_ready else "수요 예측을 재배치 staging target 의사결정으로 연결",
         },
         {
             "category": "data quality, acquisition, and documentation",
-            "score": 94 if data_ready else 75,
-            "evidence": f"effective_rows={metadata['effective_rows']}, fallback_used={fallback_used}",
+            "score": advanced_score if data_ready and frozen_ready and advanced.get("label_rows", 0) >= 500 else 94 if data_ready else 75,
+            "evidence": f"effective_rows={metadata['effective_rows']}, frozen_cohort={frozen_ready}, prospective_labels={advanced.get('label_rows', 0)}, fallback_used={fallback_used}",
         },
         {
             "category": "EDA depth and insight quality",
-            "score": 93 if data_ready else 78,
-            "evidence": "요일/시간 heatmap, weather scatter, segment demand pattern 산출",
+            "score": advanced_score if data_ready and drift_ready else 93 if data_ready else 78,
+            "evidence": f"기존 EDA + drift {advanced.get('drift_checks_passed', 0)}/{advanced.get('drift_check_count', 0)}, failure segments={advanced.get('failure_audit_segments', 0)}",
         },
         {
             "category": "feature engineering or statistical design",
-            "score": 94 if validation_ready else 80,
-            "evidence": "calendar, commute, weather stress, lag, shifted rolling feature",
+            "score": advanced_score if validation_ready and ablation_ready else 94 if validation_ready else 80,
+            "evidence": f"calendar/lag/rolling + prospective feature ablation rows={advanced.get('feature_ablation_rows', 0)}",
         },
         {
             "category": "modeling, inference, optimization, or analytical method rigor",
-            "score": 94 if model_ready else 82,
-            "evidence": f"WAPE={metrics['wape']:.2f}%, R2={metrics['r2']:.3f}, constrained rebalancing optimization",
+            "score": advanced_score if model_ready and rolling_ready else 94 if model_ready else 82,
+            "evidence": f"WAPE={metrics['wape']:.2f}%, R2={metrics['r2']:.3f}, rolling folds={advanced.get('rolling_origin_fold_count', 0)}, model-fold rows={advanced.get('rolling_origin_model_rows', 0)}",
         },
         {
             "category": "validation, testing, and reproducibility",
-            "score": 94 if validation_ready and uncertainty_ready and ci_ready else 82,
-            "evidence": "chronological split, TimeSeriesSplit, pytest, run_all.sh, bootstrap CI, conformal coverage",
+            "score": advanced_score if validation_ready and uncertainty_ready and ci_ready and prospective_ready and rolling_ready and tests_passed else 94 if validation_ready and uncertainty_ready and ci_ready else 82,
+            "evidence": f"chronological/rolling prospective validation, bootstrap/conformal, tests_passed={tests_passed}",
         },
         {
             "category": "interpretation, limitations, and decision usefulness",
-            "score": 94 if model_ready and uncertainty_ready else 82,
-            "evidence": "segment residual audit, permutation importance, weather shock, explicit station-level limitations",
+            "score": advanced_score if model_ready and uncertainty_ready and drift_ready and deploy_ready else 94 if model_ready and uncertainty_ready else 82,
+            "evidence": f"segment/drift audit, public evidence GO={deploy_ready}, causal-claim boundary",
         },
         {
             "category": "code quality, structure, maintainability, and automation",
-            "score": 93,
-            "evidence": "package structure, tests, CI, one-shot pipeline, artifact root separation",
+            "score": advanced_score if prospective_ready and tests_passed else 93,
+            "evidence": f"typed audit pipeline, artifact contracts, tests_passed={tests_passed}, advanced_artifacts={advanced.get('advanced_artifacts_present', False)}",
         },
         {
             "category": "portfolio presentation, README, figures, and final report",
-            "score": 94,
-            "evidence": "Korean README, model card, data contract, final report, representative figures",
+            "score": advanced_score if presentation_ready and prospective_ready else 94,
+            "evidence": f"conclusion-first README, figures/final report, advanced evidence={prospective_ready}, presentation_ready={presentation_ready}",
         },
         {
             "category": "doctoral-level originality, depth, and technical ambition",
-            "score": 92,
-            "evidence": "uncertainty-aware operations framing; station-level inventory/API extension added; true shortage labels require snapshot accumulation",
+            "score": advanced_score if prospective_ready and rolling_ready and drift_ready and ablation_ready and frozen_ready and deploy_ready else 92,
+            "evidence": f"frozen prospective cohort + rolling/drift/ablation + decision gate; advanced_ready={prospective_ready and rolling_ready and drift_ready and ablation_ready and frozen_ready and deploy_ready}",
         },
     ]
     return pd.DataFrame(rows)
@@ -852,7 +999,13 @@ def run_pipeline(output_root: Path, report_dir: Path) -> dict:
     overall_metrics.update(conformal_summary)
     row_counts = {"train_rows": len(train), "valid_rows": len(valid), "test_rows": len(test)}
     quality = build_quality_gate_checks(overall_metrics, metadata, row_counts)
-    quality_scores = build_quality_gate_scores(overall_metrics, metadata, row_counts)
+    advanced_evidence = load_advanced_quality_evidence(paths.output_root)
+    quality_scores = build_quality_gate_scores(
+        overall_metrics,
+        metadata,
+        row_counts,
+        advanced_evidence,
+    )
     quality.to_csv(paths.project_report_dir / "quality_gate_checks.csv", index=False)
     quality_scores.to_csv(paths.project_report_dir / "quality_gate_scores.csv", index=False)
 
@@ -888,6 +1041,8 @@ def run_pipeline(output_root: Path, report_dir: Path) -> dict:
         "quality_gate_passed": bool(quality["passed"].all() and quality_scores["score"].min() >= 90),
         "failed_quality_gates": quality.loc[~quality["passed"], "gate"].tolist(),
         "quality_gate_min_score": float(quality_scores["score"].min()),
+        "advanced_quality_evidence": advanced_evidence,
+        "verified_tests_passed": bool(advanced_evidence.get("tests_passed")),
         "quality_gates": quality.to_dict(orient="records"),
         "quality_scores": quality_scores.to_dict(orient="records"),
     }

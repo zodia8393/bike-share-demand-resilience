@@ -10,7 +10,7 @@
 | secret scan | PASS | repo에는 token, API key, cookie, `.env` 값이 필요하지 않다. |
 | public-safe fallback | PASS | 네트워크 실패 시 동일 schema의 synthetic fallback을 생성한다. |
 | station-level raw 제외 | PASS | Citi Bike ride_id가 포함된 raw zip과 GBFS/Open-Meteo raw JSON 및 station_status snapshot은 `/DATA`에만 저장하고 Git에는 코드와 aggregate/report 경로만 남긴다. |
-| public deploy gate | PASS | `scripts/check_public_deploy_readiness.py`가 raw artifact tracked 여부와 2주 snapshot readiness를 확인하고, 미충족 시 `NO_GO`로 배포를 막는다. |
+| public deploy gate | PASS | `scripts/check_public_deploy_readiness.py`가 raw artifact tracked 여부, frozen 2주 snapshot readiness, prospective validation을 확인하고 미충족 시 `NO_GO`로 배포를 막는다. |
 
 ## 공개 가능 산출물
 
@@ -22,4 +22,4 @@ raw 내부 데이터, 개인정보, private SNS 원문, 사용자 식별자, 민
 
 ## 공개 배포 상태
 
-현재 public deployment decision은 `NO_GO`다. 2주 snapshot readiness가 충족되고 deploy readiness check가 `GO`를 반환하기 전까지는 local dashboard/API만 사용한다.
+2026-07-15 KST 기준 frozen 340-snapshot cohort와 prospective validation이 통과해 upstream public evidence decision은 `GO`다. 이 판정은 외부 endpoint 배포 승인이 아니며, 실제 host는 auth, rate limit, cache policy, 운영 승인을 별도로 통과해야 한다. Raw snapshot과 credential은 계속 공개 금지다.

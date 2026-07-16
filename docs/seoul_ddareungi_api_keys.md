@@ -92,7 +92,7 @@ PYTHONPATH=src python3 scripts/run_seoul_ddareungi_validation.py
 scripts/run_seoul_ddareungi_snapshot_monitor.sh
 ```
 
-이 wrapper는 `SEOUL_OPEN_DATA_API_KEY`를 `.env` 또는 process environment에서 읽고, live snapshot 저장 후 validation report를 갱신한다. 성공 시 `/workspace/_codex/scripts/logs/seoul-ddareungi-snapshot-ok`와 일자별 marker를 남긴다.
+이 wrapper는 `SEOUL_OPEN_DATA_API_KEY`를 `.env` 또는 process environment에서 읽고, live snapshot 저장 후 validation report를 갱신한다. 성공 시 `/workspace/infra/codex/scripts/logs/seoul-ddareungi-snapshot-ok`와 일자별 marker를 남긴다.
 
 따릉이 product surface는 다음 local endpoint에서 확인한다.
 

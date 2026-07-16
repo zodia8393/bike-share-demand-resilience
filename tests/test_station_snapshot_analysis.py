@@ -1,11 +1,15 @@
+import argparse
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from bike_share_resilience.station_snapshot_analysis import (
     SnapshotReadinessConfig,
     analyze_snapshots,
     load_snapshot_history,
+    parse_snapshot_cutoff,
 )
 
 
@@ -53,3 +57,36 @@ def test_snapshot_readiness_builds_prospective_label_panel(tmp_path):
     assert summary["ready_for_prospective_validation"] is True
     assert len(history) == 24
     assert labels["bike_shortage_next_snapshot"].notna().sum() == 23
+
+
+def test_snapshot_cutoff_freezes_cohort_without_deleting_later_files(tmp_path):
+    write_snapshot(tmp_path, "20260629_000000", 1)
+    write_snapshot(tmp_path, "20260629_010000", 5)
+    write_snapshot(tmp_path, "20260629_020000", 8)
+    cutoff = datetime.fromisoformat("2026-06-29T01:00:00+09:00")
+
+    summary = analyze_snapshots(
+        tmp_path,
+        SnapshotReadinessConfig(
+            target_days=0,
+            min_hourly_coverage=1.0,
+            snapshot_cutoff_at=cutoff,
+        ),
+    )
+    history = load_snapshot_history(tmp_path, cutoff)
+    source_files = list((tmp_path / "station_level" / "data" / "status_snapshots").glob("*.csv"))
+    report = (tmp_path / "station_level" / "reports" / "station_snapshot_readiness.md").read_text(encoding="utf-8")
+
+    assert summary["snapshot_count"] == 2
+    assert summary["source_snapshot_count"] == 3
+    assert summary["excluded_snapshot_count"] == 1
+    assert summary["snapshot_cutoff_at"] == "2026-06-29T01:00:00+09:00"
+    assert len(history) == 2
+    assert len(source_files) == 3
+    assert "Snapshot cutoff: 2026-06-29T01:00:00+09:00" in report
+    assert "Excluded after cutoff: 1" in report
+
+
+def test_parse_snapshot_cutoff_rejects_timezone_naive_value():
+    with pytest.raises(argparse.ArgumentTypeError, match="timezone"):
+        parse_snapshot_cutoff("2026-07-13T14:15:03")

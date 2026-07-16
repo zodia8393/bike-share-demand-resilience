@@ -1,5 +1,6 @@
-from pathlib import Path
+import os
 import sys
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -7,6 +8,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from bike_share_resilience.pipeline import (
+    _read_pytest_evidence,
     build_quality_gate_checks,
     build_quality_gate_scores,
     build_features,
@@ -80,6 +82,82 @@ def test_quality_gate_checks_use_observable_thresholds():
     assert {"gate", "passed", "evidence", "threshold"}.issubset(checks.columns)
     assert scores["score"].min() >= 90
     assert {"category", "score", "evidence"}.issubset(scores.columns)
+
+
+def test_quality_scores_only_cross_active_floor_with_complete_advanced_evidence(tmp_path):
+    metadata = {
+        "effective_rows": 17379,
+        "effective_columns": ["cnt", "datetime"],
+        "fallback_used": False,
+    }
+    metrics = {
+        "wape": 15.0,
+        "r2": 0.93,
+        "conformal_test_coverage": 0.92,
+        "mae": 36.0,
+        "mae_ci_low": 34.0,
+        "mae_ci_high": 38.0,
+    }
+    row_counts = {"train_rows": 12000, "valid_rows": 2500, "test_rows": 2500}
+    advanced = {
+        "prospective_pass": True,
+        "advanced_validation_ready": True,
+        "advanced_artifacts_present": True,
+        "label_rows": 817668,
+        "rolling_origin_fold_count": 3,
+        "rolling_origin_model_rows": 9,
+        "feature_ablation_rows": 3,
+        "drift_checks_passed": 4,
+        "drift_check_count": 4,
+        "failure_audit_segments": 6,
+        "frozen_cohort_ready": True,
+        "public_evidence_go": True,
+        "presentation_ready": True,
+        "tests_passed": True,
+    }
+
+    advanced["tests_passed"] = False
+    unverified = build_quality_gate_scores(
+        metrics,
+        metadata,
+        row_counts,
+        advanced,
+    )
+    advanced["tests_passed"] = True
+    verified = build_quality_gate_scores(
+        metrics,
+        metadata,
+        row_counts,
+        advanced,
+    )
+
+    assert unverified["score"].min() == 93
+    assert verified["score"].min() == 96.0
+    assert verified["evidence"].str.contains("rolling|prospective|drift|ablation|tests_passed|README").all()
+
+    source_file = tmp_path / "src" / "module.py"
+    source_file.parent.mkdir(parents=True)
+    source_file.write_text("VALUE = 1\n", encoding="utf-8")
+    pytest_report = tmp_path / "reports" / "pytest.xml"
+    pytest_report.parent.mkdir()
+    pytest_report.write_text(
+        '<testsuites><testsuite tests="55" failures="0" errors="0" /></testsuites>',
+        encoding="utf-8",
+    )
+    fresh = _read_pytest_evidence(pytest_report, tmp_path)
+    assert fresh["tests_passed"] is True
+    assert fresh["test_count"] == 55
+
+    newer_mtime = pytest_report.stat().st_mtime + 2
+    os.utime(source_file, (newer_mtime, newer_mtime))
+    stale = _read_pytest_evidence(pytest_report, tmp_path)
+    assert stale["tests_passed"] is False
+    assert stale["test_evidence_fresh"] is False
+
+    pytest_report.write_text("<not-valid", encoding="utf-8")
+    malformed = _read_pytest_evidence(pytest_report, tmp_path)
+    assert malformed["tests_passed"] is False
+    assert malformed["test_count"] == 0
 
 
 def test_model_card_is_korean_template():
