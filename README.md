@@ -2,6 +2,8 @@
 
 [![ci](https://github.com/zodia8393/bike-share-demand-resilience/actions/workflows/ci.yml/badge.svg)](https://github.com/zodia8393/bike-share-demand-resilience/actions/workflows/ci.yml)
 
+[핵심 수치](#핵심-수치) · [대표 시각화](#대표-시각화) · [Architecture](#architecture) · [Quick Start](#quick-start) · [Boundaries](#boundaries)
+
 공공자전거 수요 예측을 **현장 운영 의사결정**으로 바꾸는 Stage 1 프로젝트입니다. UCI/Citi Bike benchmark에서 출발해 서울 따릉이 공개데이터 adapter까지 확장했고, 대여 불가, 반납 포화, 재배치 우선순위, 검증 전 배포 차단을 하나의 reproducible ML pipeline으로 묶었습니다.
 
 이 repo는 DecisionOps 포트폴리오의 upstream evidence layer입니다.
@@ -9,12 +11,14 @@
 | Stage | 역할 | 연결 프로젝트 |
 |---|---|---|
 | Stage 1 | 수요 예측, station risk, 서울 따릉이 adapter, validation gate | 이 repo |
-| Stage 2 | ML 산출물을 agent/tool/eval/review queue로 변환 | [Agentic DecisionOps Workbench](https://github.com/zodia8393/data-scientist-career/tree/main/agentic-decisionops-workbench) |
+| Stage 2 | ML 산출물을 agent/tool/eval/review queue로 변환 | [Agentic DecisionOps Workbench](https://github.com/zodia8393/agentic-decisionops-workbench) |
 | Stage 3 | 지도, impact card, approval API, Docker demo로 제품화 | [DecisionOps Control Tower](https://github.com/zodia8393/decisionops-control-tower) |
+
+> **Release snapshot · 2026-07-16** — Evidence gate `GO` · Frozen cohort 340 · Post-cutoff drift 4/4 `PASS` · Quality 96.0 · Policy `KEEP_PERSISTENCE_BASELINE`
 
 ## 결론
 
-고정된 340개 Citi Bike snapshot cohort가 14일 readiness와 prospective validation을 통과해 upstream evidence gate는 `GO`입니다. 서울 따릉이 adapter도 302개 snapshot 기준 `READY`이며, 결과는 Stage 2/3의 reviewer workflow로 전달됩니다. 다만 수치는 의사결정 지원용 예측 근거이지 현장 재배치의 인과효과가 아닙니다.
+고정된 340개 Citi Bike snapshot cohort가 14일 readiness와 prospective validation을 통과해 upstream evidence gate는 `GO`입니다. 서울 따릉이 adapter도 319개 snapshot 기준 `READY`이며, 결과는 Stage 2/3의 reviewer workflow로 전달됩니다. 다만 수치는 의사결정 지원용 예측 근거이지 현장 재배치의 인과효과가 아닙니다.
 
 ## 무엇을 만들었나
 
@@ -29,7 +33,19 @@
 
 ## 핵심 수치
 
-최신 로컬 산출물 기준: 2026-07-15 KST. Citi Bike prospective cohort cutoff는 2026-07-13 14:15 KST로 고정했습니다.
+최신 검증 산출물 기준: 2026-07-16 KST. Citi Bike prospective cohort cutoff는 2026-07-13 14:15 KST로 고정했습니다.
+
+| Release signal | 값 | 판단 |
+|---|---:|---|
+| Prospective evidence | F1 0.8286 · 817,668 labels | `GO` |
+| Frozen/source cohort | 340 / 361 snapshots | cutoff 이후 21개 분리 |
+| Night policy | baseline 0.5 유지 | candidate non-degradation 실패 |
+| Post-cutoff monitoring | 4 / 4 `PASS` | 자동 model 변경 없음 |
+| Seoul validation | 319 snapshots · 317 evaluated | `READY` |
+| Quality / tests | 96.0 / 63 passed | evidence freshness 확인 |
+
+<details>
+<summary><strong>전체 모델·검증 지표 보기</strong></summary>
 
 | 항목 | 값 | 의미 |
 |---|---:|---|
@@ -47,12 +63,14 @@
 | Failure segment audit | 6 segments | night F1 0.7960이 최저로 후속 monitoring 대상 |
 | Night threshold calibration | `KEEP_PERSISTENCE_BASELINE` | calibrated candidate의 final 전체/night F1 0.8275/0.7953이 baseline 0.8286/0.7960을 넘지 못함 |
 | Post-cutoff monitoring | 21 snapshots, 4 / 4 `PASS` | shortage-rate diff 0.0122, PSI 0.0017, hour TV 0.1765, station coverage 1.0 |
-| Seoul Ddareungi latest snapshot | 2,732 stations, 302 snapshots | 서울 열린데이터광장 실시간 대여정보 adapter 동작 |
-| Seoul next-snapshot validation | 302 / 24 snapshots, `READY` | 300 evaluated snapshots, 819,485 label rows, global Precision@50 0.9978 |
+| Seoul Ddareungi latest snapshot | 2,732 stations, 319 snapshots | 서울 열린데이터광장 실시간 대여정보 adapter 동작 |
+| Seoul next-snapshot validation | 319 / 24 snapshots, `READY` | 317 evaluated snapshots, 819,485 label rows, global Precision@50 0.9978 |
 | Seoul balanced action validation | send_bikes 7,500 / remove_bikes 7,500 recommendations | balanced Precision@50 0.9587, send_bikes precision 0.9192, remove_bikes precision 0.9983 |
 | Seoul priority output | top 50 candidates | 지도/API/Control Tower에서 읽을 재배치 후보 surface |
 | Public deploy decision | `GO` | frozen cohort readiness와 prospective validation을 모두 통과 |
 | Quality floor / tests | 96.0 / 63 passed | 최신 JUnit과 advanced artifact가 있을 때만 score 승격 |
+
+</details>
 
 `GO`는 모델 효과가 현장에서 실현됐다는 뜻이 아니라, 고정된 검증 cohort와 공개 안전성 gate를 통과했다는 뜻입니다. 이후 수집되는 snapshot은 frozen cohort에 섞지 않고 별도 monitoring 입력으로 다룹니다.
 
@@ -203,7 +221,7 @@ SYNTHETIC_FLAG=--synthetic TOP_STATIONS=10 OUTPUT_ROOT=/tmp/bike-share-station-s
 - 재배치 우선순위는 decision-support artifact이며 실제 현장 dispatch를 실행하지 않습니다.
 - Night segment prospective F1은 0.7960으로 전체보다 낮고 calibrated candidate도 final gate를 넘지 못했으므로 persistence baseline과 threshold 0.5를 유지합니다.
 - Cutoff 이후 snapshot은 monitoring-only이며 frozen validation metric 재산출이나 자동 모델 변경에 사용하지 않습니다.
-- 서울 따릉이 next-snapshot validation은 2026-07-15 KST 기준 `READY`입니다. Global top-K metric은 `remove_bikes` 후보 중심이고, balanced action metric은 `send_bikes`와 `remove_bikes`를 분리해 보조 근거로 사용합니다. 현장 운영 성과나 인과효과로 해석하지 않습니다.
+- 서울 따릉이 next-snapshot validation은 2026-07-16 KST 기준 319 snapshots / 317 evaluated로 `READY`입니다. Global top-K metric은 `remove_bikes` 후보 중심이고, balanced action metric은 `send_bikes`와 `remove_bikes`를 분리해 보조 근거로 사용합니다. 현장 운영 성과나 인과효과로 해석하지 않습니다.
 - API key, raw private credential, `.env` 값은 Git, report, screenshot에 남기지 않습니다.
 - 대용량 원천 데이터와 생성 산출물은 `OUTPUT_ROOT` 아래에 두고 Git에는 넣지 않습니다.
 - Stage 2/3 downstream system은 이 repo의 `GO`, `NO_GO`, `NOT_READY`, blocker를 그대로 전달하고 endpoint 배포 상태와 혼동하지 않아야 합니다.
