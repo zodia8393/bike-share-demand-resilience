@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from bike_share_resilience.station_readiness_notifications import (
+    TELEGRAM_SCRIPT,
     maybe_notify_ready_start,
     maybe_notify_validation_result,
     state_path,
@@ -27,6 +28,10 @@ def ready_payload(ready: bool = True) -> dict:
         "latest_snapshot_at": "2026-07-13T14:04:57+09:00",
         "prospective_label_rows": 24000,
     }
+
+
+def test_telegram_sender_uses_canonical_workspace_path():
+    assert TELEGRAM_SCRIPT == Path("/workspace/infra/codex/scripts/send-telegram-message.py")
 
 
 def test_ready_notification_waits_until_snapshot_readiness(tmp_path):

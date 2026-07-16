@@ -13,7 +13,7 @@ from bike_share_resilience.station_snapshot_analysis import DEFAULT_OUTPUT_ROOT
 
 
 KST = ZoneInfo("Asia/Seoul")
-TELEGRAM_SCRIPT = Path("/workspace/_codex/scripts/send-telegram-message.py")
+TELEGRAM_SCRIPT = Path("/workspace/infra/codex/scripts/send-telegram-message.py")
 
 
 Sender = Callable[[str], dict]

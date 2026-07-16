@@ -20,6 +20,7 @@ from bike_share_resilience.station_snapshot_analysis import (  # noqa: E402
     DEFAULT_OUTPUT_ROOT,
     SnapshotReadinessConfig,
     analyze_snapshots,
+    parse_snapshot_cutoff,
 )
 
 
@@ -29,6 +30,11 @@ KST = ZoneInfo("Asia/Seoul")
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Check whether the station dashboard is ready for public deployment.")
     parser.add_argument("--output-root", default=str(DEFAULT_OUTPUT_ROOT))
+    parser.add_argument(
+        "--snapshot-cutoff",
+        type=parse_snapshot_cutoff,
+        help="Inclusive ISO-8601 cutoff with timezone for a frozen snapshot cohort.",
+    )
     parser.add_argument("--report-only", action="store_true", help="Write the decision report but do not fail on NO_GO")
     return parser.parse_args()
 
@@ -51,8 +57,11 @@ def tracked_publication_risks() -> list[str]:
     return risks
 
 
-def build_decision(output_root: Path) -> dict:
-    snapshot_summary = analyze_snapshots(output_root, SnapshotReadinessConfig())
+def build_decision(output_root: Path, snapshot_cutoff_at: datetime | None = None) -> dict:
+    snapshot_summary = analyze_snapshots(
+        output_root,
+        SnapshotReadinessConfig(snapshot_cutoff_at=snapshot_cutoff_at),
+    )
     service_payload = load_service_payload(output_root)
     service_errors = validate_service_payload(service_payload)
     prospective_path = output_root / "station_level" / "reports" / "station_prospective_validation.json"
@@ -95,7 +104,7 @@ def main() -> None:
     output_root = Path(args.output_root)
     report_dir = output_root / "station_level" / "reports"
     report_dir.mkdir(parents=True, exist_ok=True)
-    decision = build_decision(output_root)
+    decision = build_decision(output_root, snapshot_cutoff_at=args.snapshot_cutoff)
     report_path = report_dir / "station_public_deploy_readiness.json"
     report_path.write_text(json.dumps(decision, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(decision, ensure_ascii=False, indent=2))

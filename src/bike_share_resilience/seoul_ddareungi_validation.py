@@ -236,19 +236,29 @@ def evaluate_rule_priority(label_panel: pd.DataFrame, config: SeoulValidationCon
     total_label_snapshots = int(valid_panel["snapshot_captured_at"].nunique())
     for captured_at, group in valid_panel.groupby("snapshot_captured_at", sort=True):
         current_rows = _records_for_priority(group)
-        priority_rows, _ = build_rebalancing_priority(current_rows, top_n=max_k)
+        priority_rows, _ = build_rebalancing_priority(current_rows, top_n=max(len(current_rows), max_k))
         if not priority_rows:
             continue
         labels_by_station = group.set_index("station_id", drop=False)
         for top_k in config.top_ks:
-            top_rows = priority_rows[:top_k]
-            row = _score_priority_rows(captured_at, top_k, top_rows, labels_by_station)
-            metric_rows.append(row)
+            global_row = _score_priority_rows(captured_at, top_k, priority_rows[:top_k], labels_by_station)
+            global_row["metric_mode"] = "global_topk"
+            metric_rows.append(global_row)
+            balanced_row = _score_priority_rows(
+                captured_at,
+                top_k,
+                _balanced_action_rows(priority_rows, top_k),
+                labels_by_station,
+            )
+            balanced_row["metric_mode"] = "balanced_action"
+            metric_rows.append(balanced_row)
 
     metrics = pd.DataFrame(metric_rows)
     if metrics.empty:
         return _rule_not_ready("priority rule produced no evaluated predictions", label_panel), metrics
 
+    global_metrics = metrics.loc[metrics["metric_mode"].eq("global_topk")].copy()
+    balanced_metrics = metrics.loc[metrics["metric_mode"].eq("balanced_action")].copy()
     snapshot_count = int(label_panel["snapshot_captured_at"].nunique())
     meets_snapshot_floor = snapshot_count >= config.min_snapshots_for_validation
     summary: dict[str, Any] = {
@@ -262,19 +272,19 @@ def evaluate_rule_priority(label_panel: pd.DataFrame, config: SeoulValidationCon
         "snapshot_count": snapshot_count,
         "min_snapshots_for_validation": config.min_snapshots_for_validation,
         "total_label_snapshots": total_label_snapshots,
-        "evaluated_snapshots": int(metrics["snapshot_captured_at"].nunique()),
+        "evaluated_snapshots": int(global_metrics["snapshot_captured_at"].nunique()),
         "label_rows": int(valid_panel[BIKE_TARGET].notna().sum()),
-        "coverage": float(metrics["snapshot_captured_at"].nunique() / max(total_label_snapshots, 1)),
+        "coverage": float(global_metrics["snapshot_captured_at"].nunique() / max(total_label_snapshots, 1)),
         "top_ks": list(config.top_ks),
     }
     for top_k in config.top_ks:
-        subset = metrics.loc[metrics["top_k"].eq(top_k)]
+        subset = global_metrics.loc[global_metrics["top_k"].eq(top_k)]
         predictions = int(subset["prediction_count"].sum())
         hits = int(subset["hit_count"].sum())
         summary[f"precision_at_{top_k}"] = float(hits / predictions) if predictions else None
         summary[f"predictions_at_{top_k}"] = predictions
         summary[f"hits_at_{top_k}"] = hits
-    top_max = metrics.loc[metrics["top_k"].eq(max_k)]
+    top_max = global_metrics.loc[global_metrics["top_k"].eq(max_k)]
     for action in ["send_bikes", "remove_bikes"]:
         count = int(top_max[f"{action}_count"].sum())
         hits = int(top_max[f"{action}_hits"].sum())
@@ -284,6 +294,7 @@ def evaluate_rule_priority(label_panel: pd.DataFrame, config: SeoulValidationCon
     top_predictions = int(top_max["prediction_count"].sum())
     top_hits = int(top_max["hit_count"].sum())
     summary["issue_hit_rate"] = float(top_hits / top_predictions) if top_predictions else None
+    summary.update(_balanced_action_summary(balanced_metrics, max_k))
     return clean_json(summary), metrics
 
 
@@ -501,12 +512,22 @@ def render_validation_report(
         f"- Label rows: {validation_summary.get('snapshot', {}).get('label_rows')}",
         f"- Precision@10: {validation_summary.get('precision_at_10')}",
         f"- Precision@50: {validation_summary.get('precision_at_50')}",
+        f"- Balanced Precision@50: {validation_summary.get('balanced_precision_at_50')}",
+        f"- Balanced send/remove counts: {validation_summary.get('balanced_send_bikes_count')} / {validation_summary.get('balanced_remove_bikes_count')}",
         f"- ML baseline status: `{model_summary.get('model_status')}`",
         f"- ML reason: {model_summary.get('reason')}",
         "",
         "## Rule Metrics",
         "",
-        render_markdown_table(validation_metrics.head(20)) if not validation_metrics.empty else "Rule metrics are not ready.",
+        render_markdown_table(validation_metrics.loc[validation_metrics["metric_mode"].eq("global_topk")].head(20))
+        if not validation_metrics.empty
+        else "Rule metrics are not ready.",
+        "",
+        "## Balanced Action Metrics",
+        "",
+        render_markdown_table(validation_metrics.loc[validation_metrics["metric_mode"].eq("balanced_action")].head(20))
+        if not validation_metrics.empty
+        else "Balanced action metrics are not ready.",
         "",
         "## ML Baseline Metrics",
         "",
@@ -600,6 +621,53 @@ def _score_priority_rows(
         "remove_bikes_hits": int(remove_hits),
         "remove_bikes_precision": float(remove_hits / remove_count) if remove_count else None,
     }
+
+
+def _balanced_action_rows(priority_rows: list[dict[str, Any]], top_k: int) -> list[dict[str, Any]]:
+    send_quota = max(0, top_k // 2)
+    remove_quota = max(0, top_k - send_quota)
+    send_rows = [row for row in priority_rows if row.get("recommended_action") == "send_bikes"][:send_quota]
+    remove_rows = [row for row in priority_rows if row.get("recommended_action") == "remove_bikes"][:remove_quota]
+    return sorted(
+        [*send_rows, *remove_rows],
+        key=lambda row: (
+            -float(row.get("severity_score") or 0),
+            -abs(int(row.get("recommended_bikes_delta") or 0)),
+            str(row.get("station_id") or ""),
+        ),
+    )
+
+
+def _balanced_action_summary(metrics: pd.DataFrame, top_k: int) -> dict[str, Any]:
+    if metrics.empty:
+        return {
+            f"balanced_precision_at_{top_k}": None,
+            "balanced_prediction_count": 0,
+            "balanced_hit_count": 0,
+            "balanced_issue_hit_rate": None,
+            "balanced_send_bikes_count": 0,
+            "balanced_send_bikes_hits": 0,
+            "balanced_send_bikes_precision": None,
+            "balanced_remove_bikes_count": 0,
+            "balanced_remove_bikes_hits": 0,
+            "balanced_remove_bikes_precision": None,
+        }
+    top_rows = metrics.loc[metrics["top_k"].eq(top_k)]
+    predictions = int(top_rows["prediction_count"].sum())
+    hits = int(top_rows["hit_count"].sum())
+    summary: dict[str, Any] = {
+        f"balanced_precision_at_{top_k}": float(hits / predictions) if predictions else None,
+        "balanced_prediction_count": predictions,
+        "balanced_hit_count": hits,
+        "balanced_issue_hit_rate": float(hits / predictions) if predictions else None,
+    }
+    for action in ["send_bikes", "remove_bikes"]:
+        count = int(top_rows[f"{action}_count"].sum())
+        action_hits = int(top_rows[f"{action}_hits"].sum())
+        summary[f"balanced_{action}_count"] = count
+        summary[f"balanced_{action}_hits"] = action_hits
+        summary[f"balanced_{action}_precision"] = float(action_hits / count) if count else None
+    return summary
 
 
 def _nullable_bool_series(series: pd.Series) -> pd.Series:

@@ -22,7 +22,7 @@ pip install -r requirements.txt
 scripts/run_all.sh
 ```
 
-`scripts/run_all.sh`는 pipeline 실행 후 `pytest`를 실행합니다.
+`scripts/run_all.sh`는 먼저 `pytest`와 JUnit report를 생성한 뒤 pipeline과 evidence-based quality gate를 실행합니다.
 
 ## pipeline 직접 실행
 
@@ -81,6 +81,11 @@ PYTHONPATH=src python3 -m bike_share_resilience.station_snapshot_analysis \
   --output-root /DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience
 PYTHONPATH=src python3 -m bike_share_resilience.station_prospective_validation \
   --output-root /DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience
+PYTHONPATH=src python3 -m bike_share_resilience.station_night_calibration \
+  --output-root /DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience
+PYTHONPATH=src python3 -m bike_share_resilience.station_post_cutoff_monitoring \
+  --output-root /DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience \
+  --snapshot-cutoff 2026-07-13T14:15:03+09:00
 PYTHONPATH=src python3 -m bike_share_resilience.station_readiness_notifications \
   --output-root /DATA/HJ/prj/data-scientist-career/projects/bike-share-demand-resilience \
   --phase ready-start \
@@ -119,6 +124,12 @@ scripts/run_station_dashboard.sh
 | `station_level/reports/station_snapshot_readiness.json` | 2주 snapshot readiness gate |
 | `station_level/reports/station_prospective_validation.json` | true shortage prospective validation status |
 | `station_level/reports/station_prospective_validation_metrics.csv` | readiness 이후 baseline/model prospective metrics |
+| `station_level/reports/station_night_calibration.json` | leakage-safe threshold calibration decision |
+| `station_level/reports/station_night_threshold_comparison.csv` | calibration/test의 all/night/non-night policy metrics |
+| `station_level/reports/station_night_class_balance.csv` | split·segment별 positive/negative 분포 |
+| `station_level/reports/station_night_hour_diagnostics.csv` | 시간대별 shortage와 state-transition audit |
+| `station_level/reports/station_post_cutoff_drift.json` | frozen 이후 monitoring-only drift decision |
+| `station_level/reports/station_post_cutoff_drift.csv` | rate·PSI·hour TV·station coverage checks |
 | `station_level/reports/station_public_deploy_readiness.json` | public deploy readiness decision |
 | `station_level/reports/station_readiness_notification_state.json` | READY 전환과 validation 결과 Telegram 중복 발송 방지 state |
 
@@ -133,4 +144,6 @@ scripts/run_station_dashboard.sh
 - `station_service --check`가 `ok: true`를 반환하고 inventory snapshot row가 1개 이상입니다.
 - `station_snapshot_readiness.json`이 생성되고, 2주 coverage 전에는 `ready_for_prospective_validation=false`를 명확히 반환합니다.
 - `station_prospective_validation.json`이 생성되고, 2주 coverage 전에는 `validation_status=NOT_READY`를 명확히 반환합니다.
+- `station_night_calibration.json`이 frozen cutoff와 calibration/test 시간 경계를 기록하고, 개선 gate 미통과 시 persistence를 유지합니다.
+- `station_post_cutoff_drift.json`이 이후 snapshot을 별도 cohort로 집계하며 위반 시 자동 변경 없이 `REVIEW_REQUIRED`를 반환합니다.
 - `station_public_deploy_readiness.json`이 생성되고, 배포 전 조건 미충족 시 `decision=NO_GO`를 반환합니다.

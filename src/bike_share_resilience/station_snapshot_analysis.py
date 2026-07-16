@@ -21,6 +21,7 @@ class SnapshotReadinessConfig:
     target_days: int = 14
     min_hourly_coverage: float = 0.80
     max_label_gap_minutes: int = 90
+    snapshot_cutoff_at: datetime | None = None
 
     @property
     def target_snapshots(self) -> int:
@@ -36,8 +37,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-root", default=str(DEFAULT_OUTPUT_ROOT))
     parser.add_argument("--target-days", type=int, default=14)
     parser.add_argument("--min-hourly-coverage", type=float, default=0.80)
+    parser.add_argument(
+        "--snapshot-cutoff",
+        type=parse_snapshot_cutoff,
+        help="Inclusive ISO-8601 cutoff with timezone for a frozen snapshot cohort.",
+    )
     parser.add_argument("--check-ready", action="store_true", help="Exit nonzero until the 2-week readiness gate passes")
     return parser.parse_args()
+
+
+def parse_snapshot_cutoff(value: str) -> datetime:
+    try:
+        cutoff = datetime.fromisoformat(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("snapshot cutoff must be an ISO-8601 datetime") from error
+    if cutoff.tzinfo is None or cutoff.utcoffset() is None:
+        raise argparse.ArgumentTypeError("snapshot cutoff must include a timezone")
+    return cutoff.astimezone(KST)
 
 
 def parse_snapshot_timestamp(path: Path) -> datetime | None:
@@ -47,11 +63,21 @@ def parse_snapshot_timestamp(path: Path) -> datetime | None:
     return datetime.strptime(match.group("stamp"), "%Y%m%d_%H%M%S").replace(tzinfo=KST)
 
 
-def list_inventory_snapshot_files(output_root: Path) -> list[Path]:
+def list_inventory_snapshot_files(
+    output_root: Path,
+    snapshot_cutoff_at: datetime | None = None,
+) -> list[Path]:
     snapshot_dir = output_root / "station_level" / "data" / "status_snapshots"
     if not snapshot_dir.exists():
         return []
-    files = [path for path in snapshot_dir.glob("*_inventory_snapshot.csv") if parse_snapshot_timestamp(path)]
+    files = []
+    for path in snapshot_dir.glob("*_inventory_snapshot.csv"):
+        captured_at = parse_snapshot_timestamp(path)
+        if captured_at is None:
+            continue
+        if snapshot_cutoff_at is not None and captured_at > snapshot_cutoff_at:
+            continue
+        files.append(path)
     return sorted(files, key=lambda path: parse_snapshot_timestamp(path) or datetime.min.replace(tzinfo=KST))
 
 
@@ -61,9 +87,12 @@ def normalize_bool(series: pd.Series) -> pd.Series:
     return series.astype(str).str.lower().isin({"true", "1", "yes", "y"})
 
 
-def load_snapshot_history(output_root: Path) -> pd.DataFrame:
+def load_snapshot_history(
+    output_root: Path,
+    snapshot_cutoff_at: datetime | None = None,
+) -> pd.DataFrame:
     frames = []
-    for path in list_inventory_snapshot_files(output_root):
+    for path in list_inventory_snapshot_files(output_root, snapshot_cutoff_at):
         captured_at = parse_snapshot_timestamp(path)
         if captured_at is None:
             continue
@@ -181,6 +210,9 @@ def render_readiness_report(summary: dict) -> str:
             f"- Generated: {summary.get('generated_at_kst')}",
             f"- Reason: {summary.get('reason')}",
             f"- Snapshot count: {summary.get('snapshot_count', 0)} / {summary.get('target_snapshots', 0)}",
+            f"- Snapshot cutoff: {summary.get('snapshot_cutoff_at') or '-'}",
+            f"- Source snapshots: {summary.get('source_snapshot_count', summary.get('snapshot_count', 0))}",
+            f"- Excluded after cutoff: {summary.get('excluded_snapshot_count', 0)}",
             f"- Minimum required snapshots: {summary.get('min_required_snapshots', 0)}",
             f"- Remaining snapshots: {summary.get('remaining_snapshots', 0)}",
             f"- Span days: {summary.get('span_days', 0):.2f}",
@@ -204,7 +236,8 @@ def analyze_snapshots(output_root: Path, config: SnapshotReadinessConfig) -> dic
     }
     for path in paths.values():
         path.mkdir(parents=True, exist_ok=True)
-    history = load_snapshot_history(output_root)
+    source_snapshot_count = len(list_inventory_snapshot_files(output_root))
+    history = load_snapshot_history(output_root, config.snapshot_cutoff_at)
     label_panel = build_shortage_label_panel(history, config)
     summary = summarize_history(history, label_panel, config)
 
@@ -217,6 +250,11 @@ def analyze_snapshots(output_root: Path, config: SnapshotReadinessConfig) -> dic
     label_panel.to_csv(label_path, index=False)
     summary.update(
         {
+            "snapshot_cutoff_at": config.snapshot_cutoff_at.isoformat()
+            if config.snapshot_cutoff_at is not None
+            else None,
+            "source_snapshot_count": source_snapshot_count,
+            "excluded_snapshot_count": max(source_snapshot_count - int(summary.get("snapshot_count", 0)), 0),
             "history_path": str(history_path),
             "label_panel_path": str(label_path),
             "report_path": str(report_path),
@@ -232,6 +270,7 @@ def main() -> None:
     config = SnapshotReadinessConfig(
         target_days=args.target_days,
         min_hourly_coverage=args.min_hourly_coverage,
+        snapshot_cutoff_at=args.snapshot_cutoff,
     )
     summary = analyze_snapshots(Path(args.output_root), config)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
