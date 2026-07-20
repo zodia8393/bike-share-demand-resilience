@@ -12,13 +12,13 @@
 |---|---|---|
 | Stage 1 | 수요 예측, station risk, 서울 따릉이 adapter, validation gate | 이 repo |
 | Stage 2 | ML 산출물을 agent/tool/eval/review queue로 변환 | [Agentic DecisionOps Workbench](https://github.com/zodia8393/agentic-decisionops-workbench) |
-| Stage 3 | 지도, impact card, approval API, Docker demo로 제품화 | [DecisionOps Control Tower](https://github.com/zodia8393/decisionops-control-tower) |
+| Stage 3 | Qdrant RAG, clickable citation, 위험 요청 거부, approval API로 제품화 | [DecisionOps AI 운영 의사결정 챗봇](https://github.com/zodia8393/decisionops-control-tower) |
 
 > **Release snapshot · 2026-07-16** — Evidence gate `GO` · Frozen cohort 340 · Post-cutoff drift 4/4 `PASS` · Quality 96.0 · Policy `KEEP_PERSISTENCE_BASELINE`
 
 ## 결론
 
-고정된 340개 Citi Bike snapshot cohort가 14일 readiness와 prospective validation을 통과해 upstream evidence gate는 `GO`입니다. 서울 따릉이 adapter도 319개 snapshot 기준 `READY`이며, 결과는 Stage 2/3의 reviewer workflow로 전달됩니다. 다만 수치는 의사결정 지원용 예측 근거이지 현장 재배치의 인과효과가 아닙니다.
+고정된 340개 Citi Bike snapshot cohort가 14일 readiness와 prospective validation을 통과해 upstream evidence gate는 `GO`입니다. 서울 따릉이 adapter도 326개 snapshot 중 324개를 평가해 `READY`이며, 결과는 Stage 2/3의 reviewer workflow와 근거 기반 챗봇으로 전달됩니다. 다만 수치는 의사결정 지원용 예측 근거이지 현장 재배치의 인과효과가 아닙니다.
 
 ## 무엇을 만들었나
 
@@ -41,7 +41,7 @@
 | Frozen/source cohort | 340 / 361 snapshots | cutoff 이후 21개 분리 |
 | Night policy | baseline 0.5 유지 | candidate non-degradation 실패 |
 | Post-cutoff monitoring | 4 / 4 `PASS` | 자동 model 변경 없음 |
-| Seoul validation | 319 snapshots · 317 evaluated | `READY` |
+| Seoul validation | 326 snapshots · 324 evaluated | `READY` |
 | Quality / tests | 96.0 / 63 passed | evidence freshness 확인 |
 
 <details>
@@ -63,9 +63,9 @@
 | Failure segment audit | 6 segments | night F1 0.7960이 최저로 후속 monitoring 대상 |
 | Night threshold calibration | `KEEP_PERSISTENCE_BASELINE` | calibrated candidate의 final 전체/night F1 0.8275/0.7953이 baseline 0.8286/0.7960을 넘지 못함 |
 | Post-cutoff monitoring | 21 snapshots, 4 / 4 `PASS` | shortage-rate diff 0.0122, PSI 0.0017, hour TV 0.1765, station coverage 1.0 |
-| Seoul Ddareungi latest snapshot | 2,732 stations, 319 snapshots | 서울 열린데이터광장 실시간 대여정보 adapter 동작 |
-| Seoul next-snapshot validation | 319 / 24 snapshots, `READY` | 317 evaluated snapshots, 819,485 label rows, global Precision@50 0.9978 |
-| Seoul balanced action validation | send_bikes 7,500 / remove_bikes 7,500 recommendations | balanced Precision@50 0.9587, send_bikes precision 0.9192, remove_bikes precision 0.9983 |
+| Seoul Ddareungi latest snapshot | 2,742 stations, 326 snapshots | 서울 열린데이터광장 실시간 대여정보 adapter 동작 |
+| Seoul next-snapshot validation | 326 / 24 snapshots, `READY` | 324 evaluated snapshots, 885,063 label rows, global Precision@50 0.9978 |
+| Seoul balanced action validation | send_bikes 8,100 / remove_bikes 8,100 recommendations | balanced Precision@50 0.9573, send_bikes precision 0.9164, remove_bikes precision 0.9981 |
 | Seoul priority output | top 50 candidates | 지도/API/Control Tower에서 읽을 재배치 후보 surface |
 | Public deploy decision | `GO` | frozen cohort readiness와 prospective validation을 모두 통과 |
 | Quality floor / tests | 96.0 / 63 passed | 최신 JUnit과 advanced artifact가 있을 때만 score 승격 |
