@@ -20,7 +20,18 @@
 
 고정된 340개 Citi Bike snapshot cohort가 14일 readiness와 prospective validation을 통과해 upstream evidence gate는 `GO`입니다. 서울 따릉이 adapter도 326개 snapshot 중 324개를 평가해 `READY`이며, 결과는 Stage 2/3의 reviewer workflow와 근거 기반 챗봇으로 전달됩니다. 다만 수치는 의사결정 지원용 예측 근거이지 현장 재배치의 인과효과가 아닙니다.
 
-## 무엇을 만들었나
+## 코드 읽는 순서
+
+| 확인할 설계 | 구현 | 검증 |
+| --- | --- | --- |
+| 수요 모델과 시간순 평가 | [pipeline.py](src/bike_share_resilience/pipeline.py) | [모델 파이프라인 테스트](tests/test_pipeline.py) |
+| 서울 원천 응답의 공통화 | [seoul_ddareungi.py](src/bike_share_resilience/seoul_ddareungi.py) | [원천 변환 테스트](tests/test_seoul_ddareungi.py) |
+| 미래 시점·고정 표본 검증 | [station_prospective_validation.py](src/bike_share_resilience/station_prospective_validation.py) | [검증 테스트](tests/test_station_prospective_validation.py) |
+| 기준일 이후 변화 감시 | [station_post_cutoff_monitoring.py](src/bike_share_resilience/station_post_cutoff_monitoring.py) | [감시 테스트](tests/test_station_post_cutoff_monitoring.py) |
+
+아래 지표는 명시된 과거 표본과 평가 조건의 기록입니다. 운영 의사결정 지원용 예측과 실제 재배치의 인과효과를 구분해 읽어주세요.
+
+### 구현 범위
 
 | 평가자가 봐야 할 것 | 구현 증거 |
 |---|---|
